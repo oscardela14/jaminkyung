@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   LayoutDashboard, Boxes, RefreshCcw, Receipt, Bell, Calculator,
-  Building2, Truck, ShoppingCart, ChevronDown, BarChart2, Calendar, ShoppingBag
+  Building2, Truck, ShoppingCart, ChevronDown, BarChart2, Calendar, ShoppingBag, Sliders
 } from 'lucide-react';
 import CosmeticsBOM from './CosmeticsBOM';
 import PurchaseClosing from './PurchaseClosing';
@@ -13,12 +13,14 @@ import { initialMockSkus } from './data';
 import Dashboard from './Dashboard';
 import StrategicSourcing from './StrategicSourcing';
 import SupplierManagement from './SupplierManagement';
+import PartnerSchedule from './PartnerSchedule';
 
 function App() {
   const [activeRoute, setActiveRoute] = useState('dashboard');
   const [isBomExpanded, setIsBomExpanded] = useState(false);
   const [isLogisticsExpanded, setIsLogisticsExpanded] = useState(false);
   const [isPurchaseExpanded, setIsPurchaseExpanded] = useState(false);
+  const [isEtcExpanded, setIsEtcExpanded] = useState(false);
   const [skus, setSkus] = useState(initialMockSkus);
   const [selectedSkuId, setSelectedSkuId] = useState('');
   const [projects, setProjects] = useState<OEMProject[]>(mockProjects);
@@ -57,6 +59,7 @@ function App() {
       );
     }
     if (activeRoute === 'order-status') return <OrderStatus projects={projects} />;
+    if (activeRoute === 'partner-schedule') return <PartnerSchedule />;
 
     switch (activeRoute) {
       case 'dashboard':
@@ -99,6 +102,7 @@ function App() {
     activeRoute === 'order-registration' ||
     activeRoute === 'order-status' ||
     activeRoute.startsWith('bom');
+  const isEtcActive = activeRoute === 'partner-schedule';
 
   const subBtn = (route: string, icon: React.ReactNode, label: string) => (
     <button
@@ -228,6 +232,25 @@ function App() {
               {subBtn('order-registration', <ShoppingBag className="w-4 h-4 shrink-0" />, '발주 등록')}
               {/* 발주 현황 */}
               {subBtn('order-status', <Calendar className="w-4 h-4 shrink-0" />, '발주 현황')}
+            </div>
+          )}
+          {/* ─── 기타 ─── */}
+          <button
+            onClick={() => setIsEtcExpanded(!isEtcExpanded)}
+            className={`w-full text-left py-3 px-4 flex items-center justify-between transition-all rounded-xl mt-1
+              ${isEtcActive && !isEtcExpanded
+                ? 'bg-[#F5F1EB] text-[#8C6D58]'
+                : 'text-[#635B56] hover:bg-[#FDFBF9] hover:text-[#2C2A29]'}`}
+          >
+            <div className="flex items-center gap-3">
+              <Sliders className="w-5 h-5 shrink-0" />
+              <span className="text-[15px] font-black">기타</span>
+            </div>
+            <ChevronDown className={`w-4 h-4 transition-transform duration-200 text-[#A8A19D] ${isEtcExpanded ? 'rotate-180' : ''}`} />
+          </button>
+          {isEtcExpanded && (
+            <div className="flex flex-col gap-1 px-2 py-1">
+              {subBtn('partner-schedule', <Calendar className="w-4 h-4 shrink-0" />, '협력사 방문 일정')}
             </div>
           )}
 

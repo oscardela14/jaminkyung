@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { ResponsiveContainer, ComposedChart, Bar, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend } from 'recharts';
-import { Building2, User, Phone, Mail, MapPin, CreditCard, Box, TrendingUp, DollarSign, ChevronRight, FileText, Plus, Trash2 } from 'lucide-react';
+import { Building2, User, Phone, Mail, MapPin, CreditCard, Box, TrendingUp, DollarSign, ChevronRight, Plus, Trash2 } from 'lucide-react';
 
 interface Props {
   onNavigate?: (route: string) => void;
@@ -52,8 +52,8 @@ const fallbackSuppliers = supplierNames.map((name, idx) => {
 });
 
 
-const SupplierManagement: React.FC<Props> = ({ onNavigate }) => {
-  const [savedAnalyses, setSavedAnalyses] = useState<any[]>(() => {
+const SupplierManagement: React.FC<Props> = () => {
+  const [savedAnalyses] = useState<any[]>(() => {
     try {
       const saved = localStorage.getItem('pa_savedAnalyses_v3');
       return saved ? JSON.parse(saved) : [];
@@ -452,7 +452,7 @@ const SupplierManagement: React.FC<Props> = ({ onNavigate }) => {
                       </tr>
                     </thead>
                     <tbody>
-                      {selectedSupplier.items.map((item, idx) => (
+                      {selectedSupplier.items.map((item: any, idx: number) => (
                         <tr key={idx} className="border-b border-[#F0ECE8] hover:bg-[#FDFBF9] transition-colors">
                           <td className="py-3 px-4 font-bold text-sm text-[#2C2A29]">{item.name}</td>
                           <td className="py-3 px-4 font-black text-base text-[#2C2A29] text-right">{item.currentPrice.toLocaleString()}원</td>
@@ -482,7 +482,7 @@ const SupplierManagement: React.FC<Props> = ({ onNavigate }) => {
                       <YAxis stroke="#A8A19D" fontSize={11} fontWeight="bold" tickLine={false} axisLine={false} tickFormatter={(v) => v.toLocaleString() + '원'} width={80} />
                       <Tooltip content={<CustomTooltipPrice />} />
                       <Legend wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
-                      {selectedSupplier.items.map((item, idx) => (
+                      {selectedSupplier.items.map((item: any, idx: number) => (
                         <Line 
                           key={idx}
                           type="stepAfter" 

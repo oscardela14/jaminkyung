@@ -39,7 +39,7 @@ const initialRFQData = [
   },
 ];
 
-const StrategicSourcing: React.FC<Props> = ({ onNavigate }) => {
+const StrategicSourcing: React.FC<Props> = () => {
   const [rfqData, setRfqData] = useState(initialRFQData);
   const [showRfqModal, setShowRfqModal] = useState(false);
   const [newRfq, setNewRfq] = useState({ supplier: '', spec: '', unitPrice: 0, moq: 0, leadTime: '', category: '포장재', paymentTerms: '익월 말 현금 결제' });
