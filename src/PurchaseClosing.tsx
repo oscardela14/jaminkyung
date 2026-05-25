@@ -36,72 +36,40 @@ const DISPLAY_CATEGORY_MAP: Record<string, string> = {
 const mapCategory = (cat: string) => DISPLAY_CATEGORY_MAP[cat] || cat;
 
 const PurchaseClosing = () => {
-  const [uploadedDataMap, setUploadedDataMap] = useState<Record<string, any>>(() => {
-    try {
-      const saved = localStorage.getItem('pc_uploadedDataMap_v3');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Object.keys(parsed).length > 0) return parsed;
-      }
-    } catch (e) {}
-    return INITIAL_MOCK_DATA;
-  });
-
-
-
-  const [selectedMonth, setSelectedMonth] = useState(() => {
-    const saved = localStorage.getItem('pc_selectedMonth_v3');
-    if (saved) return saved;
-    return ''; // Default to empty
-  });
+  const [uploadedDataMap, setUploadedDataMap] = useState<Record<string, any>>(INITIAL_MOCK_DATA);
+  const [selectedMonth, setSelectedMonth] = useState('');
 
   const [activeTab, setActiveTab] = useState<'page1' | 'page2'>('page1');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const currentData = (selectedMonth && uploadedDataMap[selectedMonth]) ? uploadedDataMap[selectedMonth] : { vendorData: [], summary: {} };
 
-  // Save states to localStorage
-  React.useEffect(() => {
-    if (Object.keys(uploadedDataMap).length > 0) {
-      localStorage.setItem('pc_uploadedDataMap_v3', JSON.stringify(uploadedDataMap));
-      localStorage.setItem('pc_isUploaded', 'true');
-    } else {
-      localStorage.removeItem('pc_uploadedDataMap_v3');
-      localStorage.setItem('pc_isUploaded', 'false');
-    }
-  }, [uploadedDataMap]);
-
-  React.useEffect(() => {
-    localStorage.setItem('pc_selectedMonth_v3', selectedMonth);
-  }, [selectedMonth]);
 
 
-
+  const categoryOrder = ['OEM/ODM', '원료', '용기/부자재', '포장재', '물류/운송', '팩킹샵', '기타'];
   let vendorData = (currentData.vendorData || []).map((v: any) => ({
     ...v,
     category: mapCategory(v.category)
-  }));
+  })).sort((a: any, b: any) => {
+    const idxA = categoryOrder.indexOf(a.category);
+    const idxB = categoryOrder.indexOf(b.category);
+    if (idxA !== idxB) {
+      const aVal = idxA === -1 ? 99 : idxA;
+      const bVal = idxB === -1 ? 99 : idxB;
+      return aVal - bVal;
+    }
+    return b.totalAmount - a.totalAmount;
+  });
 
-  // 사용자 요청: 팩킹샵 항목 강제 삽입 (데이터가 없을 경우 샘플로 추가)
-  const hasPackingShop = vendorData.some((v: any) => v.category === '팩킹샵');
-  if (!hasPackingShop && vendorData.length > 0) {
-    vendorData = [...vendorData, {
-      id: 9999,
-      name: '팩킹샵',
-      category: '팩킹샵',
-      supplyValue: 1050000,
-      vat: 105000,
-      totalAmount: 1155000,
-      magamWonjang: '완료',
-      transactionStatement: '완료',
-      taxInvoiceStatus: '완료',
-      remark: '단상자 패킹 및 수축필름 임가공'
-    }];
+  let total = vendorData.reduce((sum: number, v: any) => sum + v.totalAmount, 0);
+  let totalSupplyValue = vendorData.reduce((sum: number, v: any) => sum + v.supplyValue, 0);
+  let totalVat = vendorData.reduce((sum: number, v: any) => sum + v.vat, 0);
+
+  // 사용자 요청: 26년 4월 총 부가세 +1 단수 보정
+  if (selectedMonth === '2026-04') {
+    totalVat += 1;
+    total += 1;
   }
-
-  const total = vendorData.reduce((sum: number, v: any) => sum + v.totalAmount, 0);
-  const totalSupplyValue = vendorData.reduce((sum: number, v: any) => sum + v.supplyValue, 0);
-  const totalVat = vendorData.reduce((sum: number, v: any) => sum + v.vat, 0);
 
   let unsettled = 0;
   let taxUnreceivedCount = 0;
@@ -362,10 +330,7 @@ const PurchaseClosing = () => {
             const merged = { ...prev, ...newDataMap };
             return merged;
           });
-          const uploadedKeys = Object.keys(newDataMap).sort();
-          if (uploadedKeys.length > 0) {
-            setSelectedMonth(uploadedKeys[uploadedKeys.length - 1]);
-          }
+          setSelectedMonth('');
           alert(`${uploadedMonthsCount}개 월의 매입 마감 시트 데이터가 성공적으로 파싱 및 통합되었습니다.`);
         } else {
           alert('엑셀 파일 내 적합한 월 마감 데이터 시트(시트명 형식: 2601 ~ 2612)를 찾지 못했습니다.');
@@ -378,7 +343,16 @@ const PurchaseClosing = () => {
   };
 
   const handleDownload = () => {
-    alert('SCM 매입 마감 품의서 전자 서식 PDF 다운로드 빌드가 진행 중입니다. 🖨️');
+    const prevTab = activeTab;
+    if (activeTab !== 'page1') {
+      setActiveTab('page1');
+    }
+    setTimeout(() => {
+      window.print();
+      if (prevTab !== 'page1') {
+        setActiveTab(prevTab);
+      }
+    }, 150);
   };
 
   // SCM Dynamic Insights Generator Engine (13-Year Experience Level) — DEEP ANALYSIS
@@ -436,7 +410,12 @@ const PurchaseClosing = () => {
           { label: '구분자 비중', value: `${topCatShare}%`, alert: Number(topCatShare) > 60 },
           { label: '포장재 합산', value: formatCurrency((categoryMap['포장재'] || 0) + (categoryMap['용기/부자재'] || 0)), highlight: false },
         ],
-        detail: `원가 구성 분석 결과, 최대 비중 구분은 [${topCatName}] (${topCatShare}%)입니다. 원료(${formatCurrency(categoryMap['원료'] || 0)}) 및 패키징 자재(${formatCurrency((categoryMap['포장재'] || 0) + (categoryMap['용기/부자재'] || 0))}) 간 원가 비중 밸런스를 분기별 BOM 재설계 시 반영하여 총 조달원가율(COGS%) 목표치 내 통제를 지속합니다. 특히 용기·포장 원자재의 국제 원자재 가격 변동 헤지를 위해 장기 계약 단가 고정 협상(6개월 이상 단가 Lock-in)을 검토하십시오.`
+        detail: (() => {
+          const rawMaterialAmt = categoryMap['원료'] || 0;
+          const packagingAmt = (categoryMap['포장재'] || 0) + (categoryMap['용기/부자재'] || 0);
+          const rawMaterialPart = rawMaterialAmt > 0 ? `원료(${formatCurrency(rawMaterialAmt)}) 및 ` : '';
+          return `원가 구성 분석 결과, 최대 비중 구분은 [${topCatName}] (${topCatShare}%)입니다. ${rawMaterialPart}패키징 자재(${formatCurrency(packagingAmt)}) 간 조달 비중을 정교하게 제어하기 위해 분기별 SCM BOM 재설계 시뮬레이션을 수행하고, 총 조달원가율(COGS%) 목표치 내 통제를 전략적으로 지속해야 합니다. 특히 최근 글로벌 물류 공급망 기복과 플라스틱/종이류 원자재 가격 변동 리스크를 헤징하기 위해 핵심 용기·포장재 파트너사와 단가 고정 계약(6개월 이상 단가 Lock-in) 협상을 우선 검토하십시오.`;
+        })()
       }
     ];
   };
@@ -486,12 +465,8 @@ const PurchaseClosing = () => {
   };
 
   const getCategoryComparisonData = () => {
-    const currentCatMap: Record<string, number> = {
-      'OEM/ODM': 0, '원료': 0, '용기/부자재': 0, '포장재': 0, '물류/운송': 0, '팩킹샵': 0, '기타': 0
-    };
-    const prevCatMap: Record<string, number> = {
-      'OEM/ODM': 0, '원료': 0, '용기/부자재': 0, '포장재': 0, '물류/운송': 0, '팩킹샵': 0, '기타': 0
-    };
+    const currentCatMap: Record<string, number> = {};
+    const prevCatMap: Record<string, number> = {};
     
     vendorData.forEach((v: any) => {
       currentCatMap[v.category] = (currentCatMap[v.category] || 0) + v.totalAmount;
@@ -503,8 +478,13 @@ const PurchaseClosing = () => {
       prevCatMap[cat] = (prevCatMap[cat] || 0) + v.totalAmount;
     });
     
-    const categories = ['OEM/ODM', '원료', '용기/부자재', '포장재', '물류/운송', '팩킹샵', '기타'];
-    const allCats = Array.from(new Set([...categories, ...Object.keys(currentCatMap), ...Object.keys(prevCatMap)]));
+    const masterCategories = ['OEM/ODM', '원료', '용기/부자재', '포장재', '물류/운송', '팩킹샵', '기타'];
+    const activeCats = new Set([...Object.keys(currentCatMap), ...Object.keys(prevCatMap)]);
+    
+    const allCats = masterCategories.filter(cat => activeCats.has(cat));
+    activeCats.forEach(cat => {
+      if (!allCats.includes(cat)) allCats.push(cat);
+    });
     
     return allCats.map(cat => ({
       category: cat,
@@ -588,7 +568,7 @@ const PurchaseClosing = () => {
   // Unused category completion check removed
 
   return (
-    <div className="flex-1 h-screen flex flex-col overflow-hidden bg-[#F8FAFC] p-6 relative">
+    <div className="flex-1 h-screen flex flex-col overflow-hidden bg-[#F8FAFC] p-6 relative print:h-auto print:overflow-visible print:bg-white print:p-0">
       {/* Hidden File Input */}
       <input 
         type="file" 
@@ -599,15 +579,42 @@ const PurchaseClosing = () => {
       />
 
       {/* Header Section */}
-      <div className="flex justify-between items-center mb-4 shrink-0 bg-white p-3.5 px-5 rounded-2xl border border-slate-200/60 shadow-sm">
-        <div className="flex items-center gap-5 flex-wrap md:flex-nowrap">
+      <div className="flex flex-col gap-4 mb-4 shrink-0 bg-white p-3.5 px-5 rounded-2xl border border-slate-200/60 shadow-sm print:shadow-none print:border-none print:p-0 print:bg-transparent">
+        {/* Top Row: Title & Approval */}
+        <div className="flex justify-between items-start">
           <h1 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2 shrink-0">
             <ShieldCheck className="w-6 h-6 text-blue-600 shrink-0" />
-            월 매입 마감 품의서
+            {selectedMonth ? `${selectedMonth.split('-')[0]}년 ${parseInt(selectedMonth.split('-')[1])}월 매입 마감 품의서` : '월 매입 마감 품의서'}
           </h1>
           
-          {/* Shaded KPI Cards */}
-          <div className="h-8 w-px bg-slate-200 shrink-0 hidden md:block"></div>
+          {/* Approval Line (결재란) */}
+          <div className="hidden print:flex items-center text-center text-xs shrink-0 border-2 border-slate-300 rounded-xl overflow-hidden bg-white shadow-sm ml-auto">
+            <div className="bg-slate-50 font-black text-[12px] text-slate-500 py-4 px-2.5 border-r-2 border-slate-300 w-8 flex items-center justify-center leading-tight">
+              결<br/>재
+            </div>
+            <div className="flex divide-x-2 divide-slate-300">
+              <div className="flex flex-col w-16">
+                <div className="bg-slate-50/80 font-black text-[11px] text-slate-500 py-1.5 border-b-2 border-slate-300">담당</div>
+                <div className="h-12 flex items-center justify-center text-[9px] text-slate-300 font-semibold"></div>
+              </div>
+              <div className="flex flex-col w-16">
+                <div className="bg-slate-50/80 font-black text-[11px] text-slate-500 py-1.5 border-b-2 border-slate-300">팀장</div>
+                <div className="h-12 flex items-center justify-center text-[9px] text-slate-300 font-semibold"></div>
+              </div>
+              <div className="flex flex-col w-16">
+                <div className="bg-slate-50/80 font-black text-[11px] text-slate-500 py-1.5 border-b-2 border-slate-300">본부장</div>
+                <div className="h-12 flex items-center justify-center text-[9px] text-slate-300 font-semibold"></div>
+              </div>
+              <div className="flex flex-col w-16">
+                <div className="bg-slate-50/80 font-black text-[11px] text-slate-500 py-1.5 border-b-2 border-slate-300">대표이사</div>
+                <div className="h-12 flex items-center justify-center text-[9px] text-slate-300 font-semibold"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Bottom Row: KPIs & Month Selector */}
+        <div className="flex justify-between items-center">
           <div className="flex items-center gap-3.5 flex-nowrap">
             {/* KPI 1: Total Purchase */}
             <div className="bg-gradient-to-r from-blue-50 to-indigo-50/50 border border-blue-100 rounded-xl px-4 py-2.5 flex items-center gap-3 shadow-sm transition-all duration-300 hover:shadow-md hover:border-blue-200 min-h-[48px]">
@@ -640,38 +647,38 @@ const PurchaseClosing = () => {
               </div>
             </div>
           </div>
-        </div>
-        
-        {/* Month Selector on the right */}
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-black text-slate-500">해당월:</span>
-            <select 
-              value={selectedMonth} 
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="px-3 py-1.5 border border-slate-300 hover:border-slate-400 rounded-xl text-xs font-black focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 bg-white transition-all shadow-sm"
-            >
-              <option value="" disabled>데이터 없음</option>
-              {MONTH_OPTIONS.map(opt => {
-                const hasData = !!uploadedDataMap[opt.value];
-                return (
-                  <option key={opt.value} value={opt.value} disabled={!hasData}>
-                    {opt.label} {!hasData && '(미업로드)'}
-                  </option>
-                );
-              })}
-            </select>
+
+          {/* Month Selector on the right */}
+          <div className="flex items-center gap-3 shrink-0 print:hidden">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-black text-slate-500">해당월:</span>
+              <select 
+                value={selectedMonth} 
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="px-3 py-1.5 border border-slate-300 hover:border-slate-400 rounded-xl text-xs font-black focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 bg-white transition-all shadow-sm"
+              >
+                <option value="" disabled>데이터 없음</option>
+                {MONTH_OPTIONS.map(opt => {
+                  const hasData = !!uploadedDataMap[opt.value];
+                  return (
+                    <option key={opt.value} value={opt.value} disabled={!hasData}>
+                      {opt.label} {!hasData && '(미업로드)'}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+            <div className="h-4 w-px bg-slate-200"></div>
+            <p className="text-[11px] text-slate-500 flex items-center gap-1 font-extrabold">
+              <Calendar className="w-3.5 h-3.5 text-blue-500" />
+              {MONTH_OPTIONS.find(m => m.value === selectedMonth)?.label || '선택된 데이터 없음'} 매입 리포트
+            </p>
           </div>
-          <div className="h-4 w-px bg-slate-200"></div>
-          <p className="text-[11px] text-slate-500 flex items-center gap-1 font-extrabold">
-            <Calendar className="w-3.5 h-3.5 text-blue-500" />
-            {MONTH_OPTIONS.find(m => m.value === selectedMonth)?.label || '선택된 데이터 없음'} 매입 리포트
-          </p>
         </div>
       </div>
 
       {/* Navigation Tabs and Top Actions */}
-      <div className="flex justify-between items-center mb-4 shrink-0 gap-4">
+      <div className="flex justify-between items-center mb-4 shrink-0 gap-4 print:hidden">
         {/* High-End Segment Switcher */}
         <div className="flex bg-slate-200/50 p-1 rounded-xl shadow-inner border border-slate-200 shrink-0">
           <button
@@ -716,7 +723,12 @@ const PurchaseClosing = () => {
           </button>
           <button 
             onClick={handleDownload}
-            className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg font-black text-xs shadow-sm transition-all"
+            disabled={!selectedMonth || !uploadedDataMap[selectedMonth]}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg font-black text-xs shadow-sm transition-all border ${
+              (!selectedMonth || !uploadedDataMap[selectedMonth])
+                ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed opacity-60'
+                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-900 cursor-pointer'
+            }`}
           >
             <Download className="w-3.5 h-3.5" />
             품의서 출력 (PDF)
@@ -725,7 +737,7 @@ const PurchaseClosing = () => {
       </div>
 
       {/* Main Tab Pages */}
-      {Object.keys(uploadedDataMap).length === 0 || !uploadedDataMap[selectedMonth] ? (
+      {Object.keys(uploadedDataMap).length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center bg-white rounded-2xl border border-slate-100 shadow-sm p-10 text-center mb-4 min-h-[500px]">
           <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4 border border-blue-100 shadow-sm">
             <Upload className="w-8 h-8 text-blue-500" />
@@ -735,16 +747,27 @@ const PurchaseClosing = () => {
             우측 상단의 <b>'매입 데이터 업로드'</b> 버튼을 클릭하여 <br/>월별 매입 마감 엑셀 시트(예: 2601 ~ 2612)를 업로드해주시면 <br/>SCM 종합 대시보드가 활성화됩니다.
           </p>
         </div>
-      ) : activeTab === 'page1' ? (
-        /* PAGE 1: Detailed Closing Listing & Portfolio Analysis (Full Width & Bottom Grid) */
-        <div className="flex flex-col gap-4 flex-1 min-h-0 overflow-y-auto pr-1 scrollbar-thin">
+      ) : !uploadedDataMap[selectedMonth] ? (
+        <div className="flex-1 flex flex-col items-center justify-center bg-white rounded-2xl border border-slate-100 shadow-sm p-10 text-center mb-4 min-h-[500px]">
+          <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4 border border-blue-100 shadow-sm">
+            <Calendar className="w-8 h-8 text-blue-500" />
+          </div>
+          <h2 className="text-lg font-black text-slate-800 mb-2">데이터 업로드 완료! 월을 선택해주세요</h2>
+          <p className="text-xs font-semibold text-slate-500 max-w-md mx-auto leading-relaxed">
+            우측 상단의 드롭다운 메뉴에서 <b>분석하고 싶은 월</b>을 선택하시면 <br/>해당 월의 매입 마감 데이터가 표시됩니다.
+          </p>
+        </div>
+      ) : (
+        <>
+        {/* PAGE 1: Detailed Closing Listing & Portfolio Analysis (Full Width & Bottom Grid) */}
+        <div className={`${activeTab === 'page1' ? 'flex' : 'hidden'} print:flex flex-col gap-4 flex-1 min-h-0 overflow-y-auto pr-1 scrollbar-thin print:overflow-visible print:h-auto print:pr-0`}>
           {/* Top Panel: Supplier Closing Table (Full Width) */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 flex flex-col shrink-0 transition-all hover:shadow-md">
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 flex flex-col shrink-0 transition-all hover:shadow-md print:shadow-none print:border-none print:p-0 print:bg-transparent">
             <h2 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-1.5 shrink-0">
               <span className="text-blue-500">■</span> 업체별 마감 상세 현황 ({computedSummary.vendorCount}개 거래처)
             </h2>
-            <div className="overflow-x-auto min-h-0 scrollbar-thin scrollbar-thumb-slate-200">
-              <table className="w-full text-xs text-left border-collapse">
+            <div className="overflow-x-auto min-h-0 scrollbar-thin scrollbar-thumb-slate-200 print:overflow-visible">
+              <table id="print-closing-table" className="w-full text-xs text-left border-collapse whitespace-nowrap">
                 <thead className="text-[11px] text-slate-900 uppercase bg-slate-100 font-black border-y-2 border-slate-300 sticky top-0 z-10">
                   <tr>
                     <th className="px-3 py-2.5 text-center border-b border-r border-slate-300 w-10">No</th>
@@ -770,7 +793,7 @@ const PurchaseClosing = () => {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {vendorData.map((row: any, index: number) => (
-                    <tr key={row.id} className="hover:bg-slate-50/80 transition-colors text-xs text-slate-700">
+                    <tr key={row.id} className="hover:bg-slate-50/80 transition-colors text-xs text-slate-700 print:h-[35px]">
                       <td className="px-3 py-2 text-center border-r border-slate-200 text-slate-400 font-extrabold">{index + 1}</td>
                       <td className="px-3 py-2 text-center border-r border-slate-200 font-black text-slate-800 truncate max-w-[120px]">{row.name}</td>
                       <td className="px-3 py-2 text-center border-r border-slate-200 text-slate-600 font-semibold">{row.category}</td>
@@ -780,7 +803,7 @@ const PurchaseClosing = () => {
                       <td className="px-2 py-1 text-center border-r">
                         <button 
                           onClick={() => handleVendorFileUpload(row.id, 'magamWonjang')}
-                          className={`px-2 py-1 rounded-md text-[10px] font-black transition-all w-full shadow-sm border ${row.magamWonjang === '완료' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' : 'bg-rose-50 text-rose-600 border-rose-100 hover:bg-rose-100'}`}
+                          className={`px-2 py-1 rounded-md text-[10px] font-black transition-all w-full shadow-sm border print:border-none print:shadow-none print:bg-transparent print:p-0 print:text-[11px] ${row.magamWonjang === '완료' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' : 'bg-rose-50 text-rose-600 border-rose-100 hover:bg-rose-100'}`}
                         >
                           {row.magamWonjang === '완료' ? '대조완료' : '미수취'}
                         </button>
@@ -788,7 +811,7 @@ const PurchaseClosing = () => {
                       <td className="px-2 py-1 text-center border-r">
                         <button 
                           onClick={() => handleVendorFileUpload(row.id, 'transactionStatement')}
-                          className={`px-2 py-1 rounded-md text-[10px] font-black transition-all w-full shadow-sm border ${row.transactionStatement === '완료' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' : 'bg-rose-50 text-rose-600 border-rose-100 hover:bg-rose-100'}`}
+                          className={`px-2 py-1 rounded-md text-[10px] font-black transition-all w-full shadow-sm border print:border-none print:shadow-none print:bg-transparent print:p-0 print:text-[11px] ${row.transactionStatement === '완료' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' : 'bg-rose-50 text-rose-600 border-rose-100 hover:bg-rose-100'}`}
                         >
                           {row.transactionStatement === '완료' ? '대조완료' : '미수취'}
                         </button>
@@ -796,7 +819,7 @@ const PurchaseClosing = () => {
                       <td className="px-2 py-1 text-center border-r border-slate-200">
                         <button 
                           onClick={() => handleVendorFileUpload(row.id, 'taxInvoiceStatus')}
-                          className={`px-2 py-1 rounded-md text-[10px] font-black transition-all w-full shadow-sm border ${row.taxInvoiceStatus === '완료' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' : 'bg-rose-50 text-rose-600 border-rose-100 hover:bg-rose-100'}`}
+                          className={`px-2 py-1 rounded-md text-[10px] font-black transition-all w-full shadow-sm border print:border-none print:shadow-none print:bg-transparent print:p-0 print:text-[11px] ${row.taxInvoiceStatus === '완료' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' : 'bg-rose-50 text-rose-600 border-rose-100 hover:bg-rose-100'}`}
                         >
                           {row.taxInvoiceStatus === '완료' ? '발행확인' : '미발행'}
                         </button>
@@ -820,15 +843,15 @@ const PurchaseClosing = () => {
           </div>
 
           {/* Bottom Grid: Category Summary Table (left) + TOP5 Detail Table (right) */}
-          <div className="grid grid-cols-12 gap-4 shrink-0">
+          <div className="grid grid-cols-12 gap-4 shrink-0 print:grid-cols-1 print:gap-6 print:break-before-page print:mt-10">
             {/* LEFT: 구분자별 매입 현황 요약 테이블 */}
-            <div className="col-span-6 bg-white rounded-2xl shadow-sm border border-slate-100 p-4 flex flex-col transition-all hover:shadow-md min-h-[350px]">
+            <div className="col-span-6 print:col-span-12 bg-white rounded-2xl shadow-sm border border-slate-100 p-4 flex flex-col transition-all hover:shadow-md min-h-[350px] print:min-h-0 print:shadow-none print:border-none print:p-0 print:bg-transparent">
               <div className="flex items-center gap-2 mb-3 shrink-0">
                 <BarChart2 className="w-4 h-4 text-blue-600" />
                 <h2 className="text-xs font-black text-slate-700 uppercase tracking-wider">구분자별 매입 현황 요약 (당월 기준)</h2>
               </div>
               <div className="flex-1 overflow-x-auto">
-                <table className="w-full text-xs text-left border-collapse h-full">
+                <table id="print-category-table" className="w-full text-xs text-left border-collapse h-full whitespace-nowrap">
                   <thead className="text-[10px] text-slate-900 uppercase bg-slate-100 font-black border-y-2 border-slate-300 sticky top-0 z-10">
                     <tr>
                       <th className="px-3 py-2.5 text-center border-b border-r border-slate-300">구분자</th>
@@ -879,7 +902,7 @@ const PurchaseClosing = () => {
             </div>
 
             {/* RIGHT: 업체별 TOP 5 매입 현황 요약 테이블 */}
-            <div className="col-span-6 bg-white rounded-2xl shadow-sm border border-slate-100 p-4 flex flex-col transition-all hover:shadow-md min-h-[350px]">
+            <div className="col-span-6 print:col-span-12 bg-white rounded-2xl shadow-sm border border-slate-100 p-4 flex flex-col transition-all hover:shadow-md min-h-[350px] print:min-h-0 print:shadow-none print:border-none print:p-0 print:bg-transparent">
               <div className="flex items-center justify-between mb-3 shrink-0">
                 <div className="flex items-center gap-2">
                   <TrendingUp className="w-4 h-4 text-slate-700" />
@@ -888,7 +911,7 @@ const PurchaseClosing = () => {
                 <span className="text-[9px] text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md font-black border border-blue-100">파레토분석</span>
               </div>
               <div className="flex-1 overflow-x-auto">
-                <table className="w-full text-xs text-left border-collapse h-full">
+                <table id="print-top5-table" className="w-full text-xs text-left border-collapse h-full whitespace-nowrap">
                   <thead className="text-[10px] text-slate-900 uppercase bg-slate-100 font-black border-y-2 border-slate-300 sticky top-0 z-10">
                     <tr>
                       <th className="px-2 py-2.5 text-center border-b border-r border-slate-300 w-10">순위</th>
@@ -949,17 +972,16 @@ const PurchaseClosing = () => {
 
 
           {/* SCM Insights: Deep 6-Card Expert Report */}
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 shrink-0 transition-all hover:shadow-md">
-            <div className="flex items-center justify-between mb-3">
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 shrink-0 transition-all hover:shadow-md print:shadow-none print:border-none print:p-0 print:bg-transparent print:break-inside-avoid print:mt-6">
+            <div className="flex items-center mb-3">
               <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
                 <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white w-5 h-5 rounded-md flex items-center justify-center text-[11px] font-black">SCM</div>
                 당월 주요 특이사항 및 개선안 종합 보고
               </h2>
-              <span className="text-[9px] text-blue-600 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-md font-black">13YR EXPERT LEVEL</span>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-3 print:grid-cols-1 print:gap-4">
               {getDynamicInsights().map((item: any, idx: number) => (
-                <div key={idx} className={`rounded-xl border flex flex-col transition-all duration-300 hover:shadow-md overflow-hidden ${
+                <div key={idx} className={`rounded-xl border flex flex-col transition-all duration-300 hover:shadow-md overflow-hidden print:border-slate-300 print:break-inside-avoid print:bg-white ${
                   item.isIssue ? 'border-rose-200 bg-rose-50/30' : 'border-slate-100 bg-slate-50/50'
                 }`}>
                   {/* Card Header */}
@@ -989,17 +1011,17 @@ const PurchaseClosing = () => {
             </div>
           </div>
         </div>
-      ) : (
-        /* PAGE 2: MoM Trends, Multi-Bar Chart Portfolio, and MoM KPI Matrix Table */
-        <div className="flex flex-col gap-4 flex-1 min-h-0 overflow-y-auto pr-1 scrollbar-thin">
+        
+        {/* PAGE 2: MoM Trends, Multi-Bar Chart Portfolio, and MoM KPI Matrix Table */ }
+        <div className={`flex-col gap-4 pr-1 scrollbar-thin print:break-before-page print:mt-10 print:pr-0 print:flex print:flex-1 print:min-h-0 print:opacity-100 print:overflow-visible print:h-auto ${activeTab === 'page2' ? 'flex flex-1 min-h-0 overflow-y-auto' : 'flex h-0 overflow-hidden opacity-0 pointer-events-none'}`}>
           {/* Top Grid: Dynamic Charts */}
-          <div className="grid grid-cols-12 gap-4 shrink-0">
+          <div className="grid grid-cols-12 gap-4 shrink-0 print:grid-cols-1 print:gap-8">
             {/* Chart 1: Line Area Trend (최근 6개월 추이) */}
-            <div className="col-span-6 bg-white rounded-2xl border border-slate-100 p-4 shadow-sm hover:shadow-md transition-all">
+            <div className="col-span-6 print:col-span-12 bg-white rounded-2xl border border-slate-100 p-4 shadow-sm hover:shadow-md transition-all">
               <h2 className="text-xs font-black text-slate-700 uppercase tracking-wider mb-4 flex items-center gap-1.5">
                 <span className="text-blue-500">■</span> 최근 6개월 매입 규모 추이 ({selectedMonth} 기준 역산) <span className="text-[10px] text-slate-500 font-medium ml-auto">(단위: 억원)</span>
               </h2>
-              <div className="h-[220px]">
+              <div className="h-[220px] print:hidden">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={getHistoricalTrend()} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                     <defs>
@@ -1016,18 +1038,32 @@ const PurchaseClosing = () => {
                       contentStyle={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #cbd5e1', color: '#334155', fontSize: '11px', fontWeight: 'bold' }}
                       itemStyle={{ color: '#0f172a' }}
                     />
-                    <Area type="monotone" dataKey="매입금액(억)" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorAreaTrend)" />
+                    <Area key={`area-${activeTab}`} type="monotone" dataKey="매입금액(억)" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorAreaTrend)" isAnimationActive={true} animationDuration={1500} animationEasing="ease-in-out" />
                   </AreaChart>
                 </ResponsiveContainer>
+              </div>
+              <div className="hidden print:flex print:justify-center print:h-[280px]">
+                <AreaChart width={720} height={280} data={getHistoricalTrend()} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorAreaTrendPrint" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="label" stroke="#64748b" fontSize={10} fontWeight="bold" tickLine={false} />
+                  <YAxis stroke="#64748b" fontSize={10} fontWeight="bold" tickLine={false} label={{ value: '단위: 억원', angle: -90, position: 'insideLeft', offset: 0, style: { fontSize: '9px', fontWeight: 'bold', fill: '#94a3b8' } }} />
+                  <Area type="monotone" dataKey="매입금액(억)" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorAreaTrendPrint)" isAnimationActive={false} />
+                </AreaChart>
               </div>
             </div>
 
             {/* Chart 2: Double Bar Comparison MoM (구분자별 당월 vs 전월) */}
-            <div className="col-span-6 bg-white rounded-2xl border border-slate-100 p-4 shadow-sm hover:shadow-md transition-all">
+            <div className="col-span-6 print:col-span-12 bg-white rounded-2xl border border-slate-100 p-4 shadow-sm hover:shadow-md transition-all">
               <h2 className="text-xs font-black text-slate-700 uppercase tracking-wider mb-4 flex items-center gap-1.5">
                 <span className="text-indigo-500">■</span> 구분자별 전월 대비 비교 분석 (당월 vs 전월) <span className="text-[10px] text-slate-500 font-medium ml-auto">(단위: 억원)</span>
               </h2>
-              <div className="h-[220px]">
+              <div className="h-[220px] print:hidden">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={getCategoryComparisonData()} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -1039,10 +1075,20 @@ const PurchaseClosing = () => {
                       itemStyle={{ color: '#0f172a' }}
                     />
                     <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: '10px', fontWeight: 'extrabold', paddingBottom: '10px' }} />
-                    <Bar dataKey="전월 매입(억)" fill="#cbd5e1" radius={[4, 4, 0, 0]} name="전월" maxBarSize={20} />
-                    <Bar dataKey="당월 매입(억)" fill="#4f46e5" radius={[4, 4, 0, 0]} name="당월" maxBarSize={20} />
+                    <Bar key={`bar1-${activeTab}`} dataKey="전월 매입(억)" fill="#cbd5e1" radius={[4, 4, 0, 0]} name="전월" maxBarSize={20} isAnimationActive={true} animationDuration={1500} animationEasing="ease-in-out" />
+                    <Bar key={`bar2-${activeTab}`} dataKey="당월 매입(억)" fill="#4f46e5" radius={[4, 4, 0, 0]} name="당월" maxBarSize={20} isAnimationActive={true} animationDuration={1500} animationEasing="ease-in-out" />
                   </BarChart>
                 </ResponsiveContainer>
+              </div>
+              <div className="hidden print:flex print:justify-center print:h-[280px]">
+                <BarChart width={720} height={280} data={getCategoryComparisonData()} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="category" stroke="#64748b" fontSize={9} fontWeight="bold" tickLine={false} />
+                  <YAxis stroke="#64748b" fontSize={10} fontWeight="bold" tickLine={false} label={{ value: '단위: 억원', angle: -90, position: 'insideLeft', offset: 0, style: { fontSize: '9px', fontWeight: 'bold', fill: '#94a3b8' } }} />
+                  <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: '10px', fontWeight: 'extrabold', paddingBottom: '10px' }} />
+                  <Bar dataKey="전월 매입(억)" fill="#cbd5e1" radius={[4, 4, 0, 0]} name="전월" maxBarSize={20} isAnimationActive={false} />
+                  <Bar dataKey="당월 매입(억)" fill="#4f46e5" radius={[4, 4, 0, 0]} name="당월" maxBarSize={20} isAnimationActive={false} />
+                </BarChart>
               </div>
             </div>
           </div>
@@ -1053,7 +1099,7 @@ const PurchaseClosing = () => {
               <span className="text-indigo-500">■</span> 전월 대비 비교 분석 지표 테이블 (MoM KPI Variance Matrix)
             </h2>
             <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left border-collapse border border-slate-200">
+              <table className="w-full text-xs text-left border-collapse border border-slate-200 whitespace-nowrap">
                 <thead className="bg-slate-100 font-black border-y-2 border-slate-300 text-slate-900 uppercase text-[10px]">
                   <tr>
                     <th className="px-4 py-3 text-center border-r border-slate-300 w-1/5">항목</th>
@@ -1080,7 +1126,7 @@ const PurchaseClosing = () => {
                       }`}>
                         {row.diff}
                       </td>
-                      <td className="px-4 py-3.5 border text-center text-slate-500 font-semibold text-[11px] leading-relaxed">{row.remarks}</td>
+                      <td className="px-4 py-3.5 border text-slate-500 font-semibold text-[11px] leading-relaxed whitespace-normal break-keep text-left">{row.remarks}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1088,6 +1134,7 @@ const PurchaseClosing = () => {
             </div>
           </div>
         </div>
+        </>
       )}
     </div>
   );
