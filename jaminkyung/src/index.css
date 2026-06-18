@@ -1,0 +1,163 @@
+/* Removed default Vite styles */
+body {
+  margin: 0;
+  padding: 0;
+}
+
+@media print {
+  /* Page configuration: landscape – fits wide ranking table on one page */
+  @page {
+    size: A4 landscape;
+    margin: 7mm 9mm;
+  }
+
+  /* Global background & text colors */
+  body, html, #root {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 10px !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* Hide print-hidden and scrollbars */
+  .print-hide, .print-hide *, .print\:hidden, .no-print {
+    display: none !important;
+  }
+
+  /* 인쇄 전용 요소: hidden 클래스가 있어도 print:inline이면 보이게 강제 */
+  .print-category-text {
+    display: inline !important;
+  }
+  
+  ::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  /* Compact layout and reset backgrounds */
+  div, main, section, table, tr, td, th {
+    background-color: transparent !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+
+  /* overflow-x containers: make them visible for print */
+  .overflow-x-auto, .overflow-x-scroll {
+    overflow: visible !important;
+    width: 100% !important;
+  }
+
+  /* Print Header styling */
+  .print-header {
+    padding: 0 0 5px 0 !important;
+    margin-top: 3px !important;
+    margin-bottom: 8px !important;
+    border-bottom: 2px solid #1a202c !important;
+    background: #ffffff !important;
+  }
+  
+  .print-header h1 {
+    font-size: 16px !important;
+    font-weight: 900 !important;
+    margin-bottom: 2px !important;
+  }
+
+  /* Tables layout & styling */
+  table {
+    width: 100% !important;
+    table-layout: auto !important;
+    border-collapse: collapse !important;
+    margin-bottom: 6px !important;
+    font-size: 9px !important;
+  }
+
+  thead {
+    display: table-header-group !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  th, td {
+    padding: 3px 4px !important;
+    font-size: 9px !important;
+    line-height: 1.3 !important;
+    border: 1px solid #94a3b8 !important;
+    text-align: left !important;
+    font-weight: 500 !important;
+    word-break: keep-all !important;
+  }
+
+  /* 비고 컬럼: 넓은 빈 여백으로 손필기 공간 제공 */
+  td:last-child, th:last-child {
+    min-width: 80px !important;
+  }
+
+  /* Align center and right for specific headers and cells */
+  th.text-center, td.text-center, .text-center {
+    text-align: center !important;
+  }
+  th.text-right, td.text-right, .text-right {
+    text-align: right !important;
+  }
+
+  /* Make sure bold text shows up bold */
+  .font-black, .font-bold {
+    font-weight: 700 !important;
+  }
+
+  /* Unclamp text so that addresses and memos wrap instead of getting truncated */
+  .truncate {
+    white-space: normal !important;
+    word-break: keep-all !important;
+    word-wrap: break-word !important;
+    max-width: unset !important;
+  }
+  
+  .line-clamp-2 {
+    display: block !important;
+    -webkit-line-clamp: unset !important;
+    line-clamp: unset !important;
+    white-space: normal !important;
+  }
+
+  /* whitespace-nowrap: allow wrapping in print to prevent horizontal overflow */
+  .whitespace-nowrap {
+    white-space: normal !important;
+  }
+
+  /* Page break utilities */
+  .print\:break-before-page {
+    page-break-before: always !important;
+    break-before: page !important;
+    margin-top: 0 !important;
+  }
+
+  /* 2장으로 꽉 차고 동일한 칸 비율을 위한 파트너 행 스타일 */
+  tr.partner-row {
+    height: 48px !important;
+  }
+  tr.partner-row td {
+    height: 48px !important;
+    vertical-align: middle !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+  tr.partner-row td span,
+  tr.partner-row td span.truncate {
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    display: inline-block !important;
+    max-width: 100% !important;
+  }
+
+  /* 강제 페이지 나누기 */
+  .print-break-after-page {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+}
