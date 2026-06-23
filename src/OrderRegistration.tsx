@@ -1,41 +1,131 @@
-import React, { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Search, PackageOpen, FileText, CheckCircle2, ChevronRight, 
-  ArrowRight, Save, Package, X, Check, Printer
+  Package, Printer, Building2, Calendar
 } from 'lucide-react';
 import type { Sku } from './data';
 
-const CATEGORIES = ['전체', '세럼/앰플', '크림', '토너/스킨', '기타1', '기타2'];
+const CATEGORIES = ['전체', '세럼/앰플', '크림', '토너/스킨', '클렌저/바디', '기타1', '기타2'];
+
+interface SubMaterialConfig {
+  id: number;
+  category: string;
+  code: string;
+  name: string;
+  unit: string;
+  qtyPerUnit: number;
+  supplier: string;
+  deliveryDate: string;
+  price: number;
+}
 
 export default function OrderRegistration({ skus, onAddProject }: { skus: Sku[], onAddProject?: (proj: any) => void }) {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const [selectedSku, setSelectedSku] = useState<Sku | null>(null);
-    const [editingItemIdx, setEditingItemIdx] = useState<number | null>(null);
     
-    // Custom Order Inputs
-    const [customQty, setCustomQty] = useState<string>('');
-    const [customPrice, setCustomPrice] = useState<string>('');
+    const formatWithCommas = (value: string | number) => {
+        if (value === undefined || value === null) return '';
+        const cleanValue = value.toString().replace(/[^0-9]/g, '');
+        if (!cleanValue) return '';
+        return Number(cleanValue).toLocaleString('ko-KR');
+    };
+
+    const parseNumericValue = (value: string) => {
+        return parseInt(value.replace(/,/g, '')) || 0;
+    };
+
+    // ODM Form Fields
+    const [unitPrice, setUnitPrice] = useState<string>('0');
+    const [orderQty, setOrderQty] = useState<string>('10,000');
     const [deliveryDate, setDeliveryDate] = useState<string>('');
     const [deliveryLocation, setDeliveryLocation] = useState<string>('(주)코스메틱 제1공장');
+    const [odmSupplier, setOdmSupplier] = useState<string>('');
+    const [remarks, setRemarks] = useState<string>('');
+    
+    // Detailed Sub-material configs
+    const [subMaterialConfigs, setSubMaterialConfigs] = useState<SubMaterialConfig[]>([]);
 
-    interface OrderFormData {
-        qty: string;
-        price: string;
-        date: string;
-        location: string;
-    }
-    const [orderFormData, setOrderFormData] = useState<Record<string, OrderFormData>>({});
-
-    // Per-item order tracking
+    // Order tracking
     const [writtenOrders, setWrittenOrders] = useState<Record<string, boolean>>({});
     const [sentProjects, setSentProjects] = useState<Record<string, boolean>>({});
 
+    // Date Helper Functions
+    const addDays = (d: Date, days: number) => {
+        const nd = new Date(d);
+        nd.setDate(nd.getDate() + days);
+        return nd.toISOString().slice(0, 10);
+    };
+
+    const formatDateMMDD = (dateStr: string) => {
+        if (!dateStr) return '';
+        const parts = dateStr.split('-');
+        if (parts.length === 3) {
+            return `${parts[1]}.${parts[2]}`;
+        }
+        return dateStr;
+    };
+
+    // Initialize states when SKU is selected
+    useEffect(() => {
+        if (selectedSku) {
+            const today = new Date();
+            setUnitPrice(formatWithCommas(selectedSku.targetCost || 0));
+            setOrderQty(formatWithCommas(10000));
+            
+            const fpLeadTime = selectedSku.leadTime || 30;
+            const fpDeliveryDate = addDays(today, fpLeadTime);
+            setDeliveryDate(fpDeliveryDate);
+            setDeliveryLocation('(주)코스메틱 제1공장');
+            setRemarks('');
+
+            // Try to find the manufacturer in BOM
+            const manufacturerItem = selectedSku.bom.find(item => 
+                item.category === '임가공비' || item.category === '내용물'
+            );
+            setOdmSupplier(manufacturerItem ? manufacturerItem.supplier : (selectedSku.bom[0]?.supplier || '한국콜마'));
+
+            // Prefill submaterials schedules
+            const subMaterialsLeadTime = Math.max(5, fpLeadTime - 10);
+            const defaultSubDate = addDays(today, subMaterialsLeadTime);
+
+            const configs: SubMaterialConfig[] = selectedSku.bom.map(item => ({
+                id: item.id,
+                category: item.category,
+                code: item.code,
+                name: item.name,
+                unit: item.unit,
+                qtyPerUnit: item.qty,
+                supplier: item.supplier,
+                deliveryDate: defaultSubDate,
+                price: item.price
+            }));
+            setSubMaterialConfigs(configs);
+        } else {
+            setSubMaterialConfigs([]);
+        }
+    }, [selectedSku]);
+
+    // Handle Sub-material config changes
+    const handleSubSupplierChange = (idx: number, val: string) => {
+        setSubMaterialConfigs(prev => {
+            const next = [...prev];
+            next[idx] = { ...next[idx], supplier: val };
+            return next;
+        });
+    };
+
+    const handleSubDateChange = (idx: number, val: string) => {
+        setSubMaterialConfigs(prev => {
+            const next = [...prev];
+            next[idx] = { ...next[idx], deliveryDate: val };
+            return next;
+        });
+    };
+
     // Filter Logic
     const filteredSkus = skus.filter(sku => {
-        // If no search query and no category is selected, show nothing initially
         if (!searchQuery && !selectedCategory) return false;
-
         const matchesCategory = (!selectedCategory || selectedCategory === '전체') ? true : sku.category === selectedCategory;
         const matchesSearch = searchQuery ? (sku.id.toLowerCase().includes(searchQuery.toLowerCase()) || sku.name.toLowerCase().includes(searchQuery.toLowerCase())) : true;
         return matchesCategory && matchesSearch;
@@ -43,32 +133,7 @@ export default function OrderRegistration({ skus, onAddProject }: { skus: Sku[],
 
     const handleSelectSku = (sku: Sku) => {
         setSelectedSku(sku);
-        setEditingItemIdx(null); // Reset order form on SKU change
     };
-
-    const activeItem = selectedSku && editingItemIdx !== null ? selectedSku.bom[editingItemIdx] : null;
-
-    React.useEffect(() => {
-        if (activeItem) {
-            const key = `${selectedSku?.id}-${editingItemIdx}`;
-            if (orderFormData[key]) {
-                setCustomQty(orderFormData[key].qty);
-                setCustomPrice(orderFormData[key].price);
-                setDeliveryDate(orderFormData[key].date);
-                setDeliveryLocation(orderFormData[key].location);
-            } else {
-                setCustomQty(activeItem.qty.toString());
-                setCustomPrice(activeItem.price.toString());
-                setDeliveryDate(''); // Reset date on new item
-                setDeliveryLocation('(주)코스메틱 제1공장'); // Default location
-            }
-        }
-    }, [activeItem, selectedSku, editingItemIdx]);
-
-    const isFormValid = customQty.toString().trim() !== '' && 
-                        customPrice.toString().trim() !== '' && 
-                        deliveryDate.trim() !== '' && 
-                        deliveryLocation.trim() !== '';
 
     // 카테고리별 품목 수 계산
     const categoryCounts = CATEGORIES.reduce((acc, cat) => {
@@ -76,13 +141,113 @@ export default function OrderRegistration({ skus, onAddProject }: { skus: Sku[],
         return acc;
     }, {} as Record<string, number>);
 
-    // 검색어 하이라이트 헬퍼 함수
+    // 검색어 하이라이트
     const highlightText = (text: string, query: string) => {
         if (!query) return text;
         const parts = text.split(new RegExp(`(${query})`, 'gi'));
         return parts.map((part, i) => 
             part.toLowerCase() === query.toLowerCase() ? <span key={i} className="bg-yellow-200 text-yellow-900 px-0.5 rounded-sm">{part}</span> : part
         );
+    };
+
+    const numericQty = parseNumericValue(orderQty);
+    const numericUnitPrice = parseNumericValue(unitPrice);
+    const totalOrderCost = numericQty * numericUnitPrice;
+    const isFormValid = numericQty > 0 && numericUnitPrice > 0 && deliveryDate && deliveryLocation && odmSupplier;
+
+    // Send project to timeline
+    const handleSendOrder = () => {
+        if (!selectedSku || !isFormValid) return;
+
+        const today = new Date();
+        const formattedTodayStr = today.toISOString().slice(0, 10);
+        
+        // Calculate finished product phases based on sub-materials and delivery date
+        const subDatesMs = subMaterialConfigs.map(c => new Date(c.deliveryDate).getTime());
+        const maxSubDateMs = subDatesMs.length > 0 ? Math.max(...subDatesMs) : today.getTime();
+        const maxSubDate = new Date(maxSubDateMs);
+
+        const deliveryDateObj = new Date(deliveryDate);
+
+        // Schedule Finished Product Production and Delivery
+        // Make production start after sub-materials deliver, or 8 days before final delivery
+        const prodStart = new Date(Math.max(maxSubDate.getTime() + 24*60*60*1000, deliveryDateObj.getTime() - 9*24*60*60*1000));
+        const prodEnd = new Date(deliveryDateObj.getTime() - 3*24*60*60*1000);
+        const shippingStart = new Date(deliveryDateObj.getTime() - 2*24*60*60*1000);
+
+        const formatDate = (d: Date) => d.toISOString().slice(0, 10);
+
+        const newProject = {
+            id: `PO-${today.toISOString().slice(2,10).replace(/-/g,'')}-${selectedSku.id.replace('FG-', '')}`,
+            productName: selectedSku.name,
+            supplier: odmSupplier,
+            qty: numericQty.toLocaleString(),
+            targetDate: formatDateMMDD(deliveryDate),
+            orderDate: formatDateMMDD(formattedTodayStr),
+            status: 'On Track',
+            overallProgress: 15,
+            phases: [
+                { 
+                    phase: '생산', 
+                    startDate: formatDate(prodStart), 
+                    endDate: formatDate(prodEnd), 
+                    progress: 5, 
+                    color: 'bg-indigo-500', 
+                    isCompleted: false 
+                },
+                { 
+                    phase: '납품', 
+                    startDate: formatDate(shippingStart), 
+                    endDate: deliveryDate, 
+                    progress: 0, 
+                    color: 'bg-green-500', 
+                    isCompleted: false 
+                },
+            ],
+            subMaterials: subMaterialConfigs.map((cfg, idx) => {
+                const phaseName = cfg.category.includes('용기') ? '용기입고' : cfg.category.includes('포장') ? '부자재입고' : '원료준비';
+                const subMaterialType = cfg.category.includes('용기') ? '용기' : cfg.category.includes('포장') ? '단상자' : cfg.category.includes('캡') || cfg.category.includes('펌프') ? '펌프' : '원료&충진&포장';
+
+                const orderEndStr = addDays(today, 2);
+                
+                return {
+                    id: `${selectedSku.id}-MAT-${idx+1}`,
+                    name: cfg.name,
+                    type: subMaterialType,
+                    supplier: cfg.supplier,
+                    qty: `${(numericQty * cfg.qtyPerUnit).toLocaleString()} ${cfg.unit}`,
+                    status: 'On Track',
+                    orderDate: formatDateMMDD(formattedTodayStr),
+                    targetDate: formatDateMMDD(cfg.deliveryDate),
+                    phases: [
+                        { 
+                            phase: '발주', 
+                            startDate: formattedTodayStr, 
+                            endDate: orderEndStr, 
+                            progress: 100, 
+                            color: 'bg-blue-400', 
+                            isCompleted: true 
+                        },
+                        { 
+                            phase: phaseName, 
+                            startDate: orderEndStr, 
+                            endDate: cfg.deliveryDate, 
+                            progress: 15, 
+                            color: 'bg-orange-400', 
+                            isCompleted: false 
+                        }
+                    ]
+                };
+            })
+        };
+
+        if (onAddProject) {
+            onAddProject(newProject);
+        }
+
+        setWrittenOrders(prev => ({ ...prev, [selectedSku.id]: true }));
+        setSentProjects(prev => ({ ...prev, [selectedSku.id]: true }));
+        alert('ODM 완제품 발주 등록 및 전송이 완료되었습니다!');
     };
 
     return (
@@ -106,7 +271,7 @@ export default function OrderRegistration({ skus, onAddProject }: { skus: Sku[],
                             className="w-full pl-9 pr-3 py-2 bg-white border border-[#E4E4E7] rounded-md text-[13px] font-medium text-[#09090B] focus:outline-none focus:ring-2 focus:ring-[#09090B]/10 focus:border-[#09090B] transition-all shadow-sm placeholder-[#A1A1AA]"
                         />
                     </div>
-                    {/* Category Tabs (Expert Level) */}
+                    {/* Category Tabs */}
                     <div className="grid grid-cols-3 gap-1.5 pb-1 mt-4 border-b border-[#E4E4E7]/50 pb-3">
                         {CATEGORIES.map(cat => (
                             <button
@@ -138,10 +303,8 @@ export default function OrderRegistration({ skus, onAddProject }: { skus: Sku[],
                         ) : (
                             filteredSkus.map(sku => {
                                 const isSelected = selectedSku?.id === sku.id;
-                                // Calculate how many BOM items are ordered
-                                const totalBom = sku.bom.length;
-                                const orderedBom = sku.bom.filter((_, idx) => writtenOrders[`${sku.id}-${idx}`]).length;
-                                const isComplete = totalBom > 0 && totalBom === orderedBom;
+                                const isSent = sentProjects[sku.id];
+                                const isWritten = writtenOrders[sku.id];
 
                                 return (
                                     <button 
@@ -157,166 +320,20 @@ export default function OrderRegistration({ skus, onAddProject }: { skus: Sku[],
                                                 ${isSelected ? 'bg-[#F4F4F5] text-[#09090B]' : 'bg-transparent text-[#A1A1AA]'}`}>
                                                 {highlightText(sku.id, searchQuery)}
                                             </span>
-                                            {isComplete ? (
-                                                <span className="flex items-center gap-1 text-[10px] font-black text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full shadow-sm"><CheckCircle2 className="w-3 h-3" /> 완료</span>
-                                            ) : orderedBom > 0 ? (
-                                                <span className="text-[10px] font-black text-blue-600 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-full shadow-sm">진행중</span>
+                                            {isSent ? (
+                                                <span className="flex items-center gap-1 text-[10px] font-black text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full shadow-sm"><CheckCircle2 className="w-3 h-3" /> 전송완료</span>
+                                            ) : isWritten ? (
+                                                <span className="text-[10px] font-black text-blue-600 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-full shadow-sm">작성됨</span>
                                             ) : null}
                                         </div>
                                         <p className={`text-[13px] font-black leading-snug
                                             ${isSelected ? 'text-[#09090B]' : 'text-[#3F3F46]'}`}>
                                             {highlightText(sku.name, searchQuery)}
                                         </p>
-                                        <div className="flex items-center justify-between mt-1">
+                                        <div className="flex justify-between items-center mt-1">
                                             <span className="text-[11px] font-bold text-[#71717A] bg-[#F4F4F5] px-1.5 py-0.5 rounded">{sku.category}</span>
-                                            <div className="flex items-center gap-1.5">
-                                                <div className="w-16 h-1.5 bg-[#E4E4E7] rounded-full overflow-hidden">
-                                                    <div className="h-full bg-[#09090B] rounded-full" style={{ width: `${totalBom > 0 ? (orderedBom / totalBom) * 100 : 0}%` }}></div>
-                                                </div>
-                                                <span className="text-[10px] font-mono font-bold text-[#A1A1AA]">{orderedBom}/{totalBom}</span>
-                                            </div>
+                                            <ChevronRight className={`w-4 h-4 ${isSelected ? 'text-[#09090B]' : 'text-[#D4D4D8]'}`} />
                                         </div>
-                                        
-                                        {/* 발주현황으로 전송 버튼 (완료 시 노출) */}
-                                        {isComplete && !sentProjects[sku.id] && (
-                                            <div className="mt-2 pt-2 border-t border-[#E4E4E7]">
-                                                <button 
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        if (onAddProject) {
-                                                            const today = new Date();
-                                                            const addDays = (d: Date, days: number) => {
-                                                                const nd = new Date(d);
-                                                                nd.setDate(nd.getDate() + days);
-                                                                return nd.toISOString().slice(0, 10);
-                                                            };
-                                                            
-                                                            const calculateProgress = (targetDateStr: string) => {
-                                                                const target = new Date(targetDateStr).getTime();
-                                                                const now = new Date().getTime();
-                                                                const daysUntil = (target - now) / (1000 * 60 * 60 * 24);
-                                                                const maxLeadTime = 30; // 30 days standard lead time
-                                                                if (daysUntil <= 0) return 100;
-                                                                if (daysUntil >= maxLeadTime) return 5;
-                                                                return Math.max(5, Math.round((1 - (daysUntil / maxLeadTime)) * 100));
-                                                            };
-                                                            
-                                                            const newProject = {
-                                                                id: `PO-${today.toISOString().slice(2,10).replace(/-/g,'')}-${sku.id.replace('FG-', '')}`,
-                                                                productName: sku.name,
-                                                                supplier: '멀티 공급처',
-                                                                qty: '10,000',
-                                                                targetDate: addDays(today, 30).replace(/-/g, '.').substring(5),
-                                                                status: 'On Track',
-                                                                overallProgress: 15,
-                                                                phases: [
-                                                                    { phase: '생산', startDate: addDays(today, 15), endDate: addDays(today, 20), progress: calculateProgress(addDays(today, 20)), color: 'bg-indigo-500', isCompleted: false },
-                                                                    { phase: '납품', startDate: addDays(today, 21), endDate: addDays(today, 25), progress: calculateProgress(addDays(today, 25)), color: 'bg-green-500', isCompleted: false },
-                                                                ],
-                                                                subMaterials: sku.bom.map((bomItem, idx) => {
-                                                                    const key = `${sku.id}-${idx}`;
-                                                                    const saved = orderFormData[key];
-                                                                    const dateStr = saved?.date || addDays(today, 15);
-                                                                    const phaseName = bomItem.category.includes('용기') ? '용기입고' : bomItem.category.includes('포장') ? '부자재입고' : '원료준비';
-                                                                    
-                                                                    const orderEndStr = addDays(today, 2);
-                                                                    const receivingStartStr = orderEndStr; // Span from order end to delivery
-                                                                    
-                                                                    return {
-                                                                        id: `${sku.id}-MAT-${idx+1}`,
-                                                                        name: bomItem.name,
-                                                                        type: bomItem.category.includes('용기') ? '용기' : bomItem.category.includes('포장') ? '단상자' : '원료&충진&포장',
-                                                                        supplier: saved?.location || bomItem.supplier,
-                                                                        qty: `${saved?.qty || bomItem.qty} ${bomItem.unit}`,
-                                                                        status: 'On Track',
-                                                                        orderDate: today.toISOString().slice(5,10).replace('-', '.'),
-                                                                        targetDate: dateStr.substring(5).replace('-', '.'),
-                                                                        phases: [
-                                                                            { phase: '발주', startDate: today.toISOString().slice(0, 10), endDate: orderEndStr, progress: 100, color: 'bg-blue-400', isCompleted: true },
-                                                                            { phase: phaseName, startDate: receivingStartStr, endDate: dateStr, progress: calculateProgress(dateStr), color: 'bg-orange-400', isCompleted: false }
-                                                                        ]
-                                                                    };
-                                                                })
-                                                            };
-                                                            onAddProject(newProject);
-                                                        }
-                                                        setSentProjects(prev => ({ ...prev, [sku.id]: true }));
-                                                    }}
-                                                    className="w-full py-2 bg-[#09090B] text-white text-[11px] font-bold rounded flex items-center justify-center gap-1.5 hover:bg-black transition-colors"
-                                                >
-                                                    <ArrowRight className="w-3 h-3" /> 발주현황으로 전송
-                                                </button>
-                                            </div>
-                                        )}
-                                        {isComplete && sentProjects[sku.id] && (
-                                            <div className="mt-2 pt-2 border-t border-[#E4E4E7]">
-                                                <button 
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        if (onAddProject) {
-                                                            const today = new Date();
-                                                            const addDays = (d: Date, days: number) => {
-                                                                const nd = new Date(d);
-                                                                nd.setDate(nd.getDate() + days);
-                                                                return nd.toISOString().slice(0, 10);
-                                                            };
-                                                            
-                                                            const calculateProgress = (targetDateStr: string) => {
-                                                                const target = new Date(targetDateStr).getTime();
-                                                                const now = new Date().getTime();
-                                                                const daysUntil = (target - now) / (1000 * 60 * 60 * 24);
-                                                                const maxLeadTime = 30; // 30 days standard lead time
-                                                                if (daysUntil <= 0) return 100;
-                                                                if (daysUntil >= maxLeadTime) return 5;
-                                                                return Math.max(5, Math.round((1 - (daysUntil / maxLeadTime)) * 100));
-                                                            };
-                                                            
-                                                            const newProject = {
-                                                                id: `PO-${today.toISOString().slice(2,10).replace(/-/g,'')}-${sku.id.replace('FG-', '')}`,
-                                                                productName: sku.name,
-                                                                supplier: '멀티 공급처',
-                                                                qty: '10,000',
-                                                                targetDate: addDays(today, 30).replace(/-/g, '.').substring(5),
-                                                                status: 'On Track',
-                                                                overallProgress: 15,
-                                                                phases: [
-                                                                    { phase: '생산', startDate: addDays(today, 15), endDate: addDays(today, 20), progress: calculateProgress(addDays(today, 20)), color: 'bg-indigo-500', isCompleted: false },
-                                                                    { phase: '납품', startDate: addDays(today, 21), endDate: addDays(today, 25), progress: calculateProgress(addDays(today, 25)), color: 'bg-green-500', isCompleted: false },
-                                                                ],
-                                                                subMaterials: sku.bom.map((bomItem, idx) => {
-                                                                    const key = `${sku.id}-${idx}`;
-                                                                    const saved = orderFormData[key];
-                                                                    const dateStr = saved?.date || addDays(today, 15);
-                                                                    const phaseName = bomItem.category.includes('용기') ? '용기입고' : bomItem.category.includes('포장') ? '부자재입고' : '원료준비';
-                                                                    
-                                                                    const orderEndStr = addDays(today, 2);
-                                                                    const receivingStartStr = orderEndStr; // Span from order end to delivery
-                                                                    
-                                                                    return {
-                                                                        id: `${sku.id}-MAT-${idx+1}`,
-                                                                        name: bomItem.name,
-                                                                        type: bomItem.category.includes('용기') ? '용기' : bomItem.category.includes('포장') ? '단상자' : '원료&충진&포장',
-                                                                        supplier: saved?.location || bomItem.supplier,
-                                                                        qty: `${saved?.qty || bomItem.qty} ${bomItem.unit}`,
-                                                                        status: 'On Track',
-                                                                        orderDate: today.toISOString().slice(5,10).replace('-', '.'),
-                                                                        targetDate: dateStr.substring(5).replace('-', '.'),
-                                                                        phases: [
-                                                                            { phase: '발주', startDate: today.toISOString().slice(0, 10), endDate: orderEndStr, progress: 100, color: 'bg-blue-400', isCompleted: true },
-                                                                            { phase: phaseName, startDate: receivingStartStr, endDate: dateStr, progress: calculateProgress(dateStr), color: 'bg-orange-400', isCompleted: false }
-                                                                        ]
-                                                                    };
-                                                                })
-                                                            };
-                                                            onAddProject(newProject);
-                                                        }
-                                                    }}
-                                                    className="w-full py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-100 text-[11px] font-bold rounded flex items-center justify-center gap-1.5 transition-colors"
-                                                >
-                                                    <CheckCircle2 className="w-3.5 h-3.5" /> 전송된 내역 다시 전송 (수정)
-                                                </button>
-                                            </div>
-                                        )}
                                     </button>
                                 );
                             })
@@ -326,338 +343,333 @@ export default function OrderRegistration({ skus, onAddProject }: { skus: Sku[],
             </div>
 
             {/* =======================================
-                COLUMN 2: Main Area (BOM Table)
+                COLUMN 2: Main Area (ODM unified form + sub-material schedules)
             ======================================= */}
-            <div className={`flex-1 flex flex-col h-full bg-white transition-all ${editingItemIdx !== null ? 'mr-[420px]' : ''}`}>
+            <div className="flex-1 flex flex-col h-full bg-[#FAFAFA] overflow-y-auto print:bg-white print:h-auto print:block">
                 {selectedSku ? (
-                    <>
+                    <div className="p-6 space-y-6 max-w-6xl mx-auto w-full print:p-0">
                         {/* Header */}
-                        <div className="h-[68px] border-b border-[#E4E4E7] flex items-center justify-between px-6 shrink-0 bg-white z-10 print:h-auto print:border-none print:px-0 print:mb-4">
+                        <div className="flex items-center justify-between border-b border-[#E4E4E7] pb-4 print:hidden">
                             <div>
                                 <div className="flex items-center gap-2 text-[12px] font-bold text-[#71717A] mb-1">
                                     <span>{selectedSku.category}</span>
                                     <ChevronRight className="w-3 h-3" />
                                     <span className="font-mono text-[#A1A1AA]">{selectedSku.id}</span>
                                 </div>
-                                <h1 className="text-xl font-black text-[#09090B] tracking-tight">{selectedSku.name}</h1>
+                                <h1 className="text-2xl font-black text-[#09090B] tracking-tight">{selectedSku.name}</h1>
                             </div>
-                            <div className="flex items-center gap-4 text-right print:hidden">
-                                <div className="flex flex-col">
-                                    <span className="text-[11px] font-bold text-[#A1A1AA] uppercase tracking-wider">총 예상 발주 비용</span>
-                                    <span className="text-lg font-black text-[#09090B] font-mono">
-                                        {selectedSku.bom.reduce((acc, curr) => acc + (curr.qty * curr.price), 0).toLocaleString()} <span className="text-sm font-bold text-[#71717A]">원</span>
+                            <div className="flex gap-2">
+                                <button 
+                                    onClick={() => window.print()}
+                                    className="px-4 py-2 bg-white border border-[#E4E4E7] rounded-xl text-sm font-bold text-[#52525B] hover:bg-[#FAFAFA] transition-all flex items-center gap-2 shadow-sm"
+                                >
+                                    <Printer className="w-4 h-4" /> PDF 출력
+                                </button>
+                                <button 
+                                    disabled={!isFormValid}
+                                    onClick={handleSendOrder}
+                                    className={`px-5 py-2 rounded-xl text-sm font-black transition-all flex items-center gap-2 shadow-md
+                                        ${isFormValid 
+                                            ? 'bg-[#09090B] text-white hover:bg-black active:scale-95' 
+                                            : 'bg-[#E4E4E7] text-[#A1A1AA] cursor-not-allowed shadow-none'}`}
+                                >
+                                    <CheckCircle2 className="w-4 h-4" /> 완제품 발주등록 및 전송
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* ODM Form and submaterials container */}
+                        {/* ODM Form and submaterials container (Stacked Vertically) */}
+                        <div className="flex flex-col gap-6 w-full print:hidden">
+                            
+                            {/* Main Finished Product Details Form Card (Full Width) */}
+                            <div className="bg-white border border-[#E4E4E7] rounded-2xl p-6 shadow-sm space-y-6 print:border-none print:p-0 print:shadow-none">
+                                <h2 className="text-base font-black text-[#09090B] flex items-center gap-2 pb-3 border-b border-[#F4F4F5] print:hidden">
+                                    <FileText className="w-4 h-4 text-[#71717A]" /> 완제품 ODM 발주 정보
+                                </h2>
+
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    {/* Column 1 */}
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-[11px] font-black text-[#71717A] uppercase tracking-wider mb-1.5">ODM 제조사</label>
+                                            <div className="relative">
+                                                <Building2 className="w-4 h-4 text-[#A1A1AA] absolute left-3 top-1/2 -translate-y-1/2" />
+                                                <input 
+                                                    type="text" 
+                                                    value={odmSupplier}
+                                                    onChange={(e) => setOdmSupplier(e.target.value)}
+                                                    className="w-full pl-9 pr-3 py-2 bg-white border border-[#E4E4E7] rounded-xl text-[13px] font-bold text-[#09090B] focus:outline-none focus:ring-2 focus:ring-[#09090B]/10 focus:border-[#09090B] transition-all"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-[11px] font-black text-[#71717A] uppercase tracking-wider mb-1.5">발주 수량 (EA)</label>
+                                                <input 
+                                                    type="text" 
+                                                    inputMode="numeric"
+                                                    value={orderQty}
+                                                    onChange={(e) => setOrderQty(formatWithCommas(e.target.value))}
+                                                    className="w-full px-3 py-2 bg-white border border-[#E4E4E7] rounded-xl text-[13px] font-mono font-black text-[#09090B] focus:outline-none focus:ring-2 focus:ring-[#09090B]/10 focus:border-[#09090B] transition-all"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[11px] font-black text-[#71717A] uppercase tracking-wider mb-1.5">완제품 발주단가 (원)</label>
+                                                <div className="relative">
+                                                    <input 
+                                                        type="text" 
+                                                        inputMode="numeric"
+                                                        value={unitPrice}
+                                                        onChange={(e) => setUnitPrice(formatWithCommas(e.target.value))}
+                                                        className="w-full pl-3 pr-7 py-2 bg-white border border-[#E4E4E7] rounded-xl text-[13px] font-mono font-black text-[#09090B] focus:outline-none focus:ring-2 focus:ring-[#09090B]/10 focus:border-[#09090B] transition-all"
+                                                    />
+                                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#A1A1AA]">원</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Column 2 */}
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-[11px] font-black text-[#71717A] uppercase tracking-wider mb-1.5">완제품 최종 납기요청일</label>
+                                            <div className="relative">
+                                                <Calendar className="w-4 h-4 text-[#A1A1AA] absolute left-3 top-1/2 -translate-y-1/2" />
+                                                <input 
+                                                    type="date" 
+                                                    value={deliveryDate}
+                                                    onChange={(e) => setDeliveryDate(e.target.value)}
+                                                    className="w-full pl-9 pr-3 py-2 bg-white border border-[#E4E4E7] rounded-xl text-[13px] font-medium text-[#09090B] focus:outline-none focus:ring-2 focus:ring-[#09090B]/10 focus:border-[#09090B] transition-all"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-[11px] font-black text-[#71717A] uppercase tracking-wider mb-1.5">입고 장소 (납품처)</label>
+                                            <input 
+                                                type="text" 
+                                                value={deliveryLocation}
+                                                onChange={(e) => setDeliveryLocation(e.target.value)}
+                                                className="w-full px-3 py-2 bg-white border border-[#E4E4E7] rounded-xl text-[13px] font-bold text-[#09090B] focus:outline-none focus:ring-2 focus:ring-[#09090B]/10 focus:border-[#09090B] transition-all"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Column 3 */}
+                                    <div className="flex flex-col justify-between h-full space-y-4 md:space-y-0">
+                                        <div>
+                                            <label className="block text-[11px] font-black text-[#71717A] uppercase tracking-wider mb-1.5">특이사항 (비고)</label>
+                                            <textarea 
+                                                rows={2}
+                                                value={remarks}
+                                                onChange={(e) => setRemarks(e.target.value)}
+                                                placeholder="요청사항 기재..."
+                                                className="w-full px-3 py-2 bg-white border border-[#E4E4E7] rounded-xl text-[13px] font-medium text-[#09090B] focus:outline-none focus:ring-2 focus:ring-[#09090B]/10 focus:border-[#09090B] transition-all resize-none"
+                                            />
+                                        </div>
+
+                                        {/* Total Amount Display Box */}
+                                        <div className="bg-[#F8F6F4] rounded-2xl p-4 border border-[#EBE5DF]">
+                                            <span className="text-[11px] font-black text-[#8C6D58] uppercase tracking-wider">총 발주 총액</span>
+                                            <div className="flex items-baseline justify-between mt-1">
+                                                <span className="text-2xl font-black text-[#2C2A29] font-mono">{totalOrderCost.toLocaleString()}</span>
+                                                <span className="text-xs font-bold text-[#635B56]">KRW (원)</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Sub-material Detailed Schedule Overrides Card (Full Width) */}
+                            <div className="bg-white border border-[#E4E4E7] rounded-2xl p-6 shadow-sm flex flex-col print:border-none print:p-0 print:shadow-none print:mt-8">
+                                <div className="pb-3 border-b border-[#F4F4F5] mb-4 flex justify-between items-center print:hidden">
+                                    <h2 className="text-base font-black text-[#09090B] flex items-center gap-2">
+                                        <Package className="w-4 h-4 text-[#71717A]" /> 부자재별 세부 일정 및 공급처 개별 조정
+                                    </h2>
+                                    <span className="text-[11px] font-bold text-[#A1A1AA] bg-[#F4F4F5] px-2 py-0.5 rounded">
+                                        BOM 기준 자동 계산
                                     </span>
                                 </div>
-                            </div>
-                        </div>
 
-                        {/* High-density Table */}
-                        <div className="flex-1 overflow-auto bg-[#FAFAFA] p-6 print:p-0">
-                            <div className="bg-white border border-[#E4E4E7] rounded-xl shadow-sm overflow-hidden flex flex-col">
-                                <table className="w-full text-left border-collapse whitespace-nowrap">
-                                    <thead className="bg-[#F4F4F5] border-b border-[#E4E4E7]">
-                                        <tr className="text-[13px] text-[#71717A] font-black uppercase tracking-wider">
-                                            <th className="py-2.5 px-4 font-bold text-center w-12">상태</th>
-                                            <th className="py-2.5 px-4">구분</th>
-                                            <th className="py-2.5 px-4">품목명 / 코드</th>
-                                            <th className="py-2.5 px-4">공급처</th>
-                                            <th className="py-2.5 px-4 text-right">소요량/단위</th>
-                                            <th className="py-2.5 px-4 text-right">단가(원)</th>
-                                            <th className="py-2.5 px-4 text-right text-[#09090B]">누계(원)</th>
-                                            <th className="py-2.5 px-4 text-center w-20 print:hidden">발주</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="text-[14px]">
-                                        {selectedSku.bom.map((item, idx) => {
-                                            const lineTotal = item.qty * item.price;
-                                            const isWritten = writtenOrders[`${selectedSku.id}-${idx}`];
-                                            const isEditing = editingItemIdx === idx;
-                                            
-                                            let catColor = "text-[#71717A] bg-[#F4F4F5]";
-                                            if (item.category === '내용물') catColor = "text-emerald-700 bg-emerald-50 border-emerald-200";
-                                            if (item.category.includes('부자재')) catColor = "text-blue-700 bg-blue-50 border-blue-200";
-                                            if (item.category.includes('용기')) catColor = "text-amber-700 bg-amber-50 border-amber-200";
+                                <div className="flex-1 overflow-x-auto">
+                                    <table className="w-full text-left border-collapse whitespace-nowrap min-w-[500px]">
+                                        <thead>
+                                            <tr className="bg-[#F4F4F5] border-b border-[#E4E4E7] text-[12px] font-black text-[#71717A]">
+                                                <th className="py-2.5 px-3">구분</th>
+                                                <th className="py-2.5 px-3">부자재명 (코드)</th>
+                                                <th className="py-2.5 px-3 text-right">단가</th>
+                                                <th className="py-2.5 px-3 text-right">총 소요량</th>
+                                                <th className="py-2.5 px-3">공급처(제조사)</th>
+                                                <th className="py-2.5 px-3">납기 요청일</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="text-[13px] divide-y divide-[#F4F4F5]">
+                                            {subMaterialConfigs.map((cfg, idx) => {
+                                                const totalReq = numericQty * cfg.qtyPerUnit;
+                                                
+                                                let catColor = "text-[#71717A] bg-[#F4F4F5]";
+                                                if (cfg.category === '내용물') catColor = "text-emerald-700 bg-emerald-50 border-emerald-200";
+                                                if (cfg.category.includes('부자재')) catColor = "text-blue-700 bg-blue-50 border-blue-200";
+                                                if (cfg.category.includes('용기')) catColor = "text-amber-700 bg-amber-50 border-amber-200";
 
-                                            return (
-                                                <tr 
-                                                    key={idx} 
-                                                    onClick={() => setEditingItemIdx(idx)}
-                                                    className={`border-b border-[#F4F4F5] transition-colors cursor-pointer group
-                                                        ${isEditing ? 'bg-[#F4F4F5] shadow-[inset_2px_0_0_#09090B]' : 'hover:bg-[#FAFAFA]'}`}
-                                                >
-                                                    <td className="py-3 px-4 text-center">
-                                                        {isWritten ? (
-                                                            <div className="w-5 h-5 mx-auto rounded-full bg-emerald-100 flex items-center justify-center">
-                                                                <Check className="w-3 h-3 text-emerald-600" strokeWidth={3} />
-                                                            </div>
-                                                        ) : (
-                                                            <div className="w-5 h-5 mx-auto rounded-full border-2 border-[#E4E4E7] group-hover:border-[#D4D4D8]"></div>
-                                                        )}
-                                                    </td>
-                                                    <td className="py-3 px-4">
-                                                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-black border ${catColor}`}>
-                                                            {item.category}
-                                                        </span>
-                                                    </td>
-                                                    <td className="py-3 px-4">
-                                                        <p className="font-bold text-[#09090B] mb-0.5">{item.name}</p>
-                                                        <p className="font-mono text-[12px] text-[#A1A1AA]">{item.code}</p>
-                                                    </td>
-                                                    <td className="py-3 px-4 font-medium text-[#52525B]">{item.supplier || '-'}</td>
-                                                    <td className="py-3 px-4 text-right">
-                                                        <span className="font-mono font-black text-[#09090B]">{item.qty}</span>
-                                                        <span className="text-[11px] font-bold text-[#A1A1AA] ml-1 uppercase">{item.unit}</span>
-                                                    </td>
-                                                    <td className="py-3 px-4 text-right font-mono text-[#71717A]">{item.price.toLocaleString()}</td>
-                                                    <td className="py-3 px-4 text-right font-mono font-black text-[#09090B]">{lineTotal.toLocaleString()}</td>
-                                                    <td className="py-3 px-4 text-center print:hidden">
-                                                        {isWritten ? (
-                                                            <div className="flex items-center justify-center gap-1">
-                                                                <button 
-                                                                    onClick={(e) => { e.stopPropagation(); setEditingItemIdx(idx); }}
-                                                                    className="text-[12px] font-bold px-2.5 py-1 rounded transition-colors text-[#09090B] bg-[#E4E4E7] hover:bg-[#D4D4D8]"
-                                                                >
-                                                                    수정
-                                                                </button>
-                                                                <button 
-                                                                    onClick={(e) => { e.stopPropagation(); setEditingItemIdx(idx); setTimeout(() => window.print(), 100); }}
-                                                                    className="text-[12px] font-bold px-2 py-1 rounded transition-colors text-red-600 bg-red-50 hover:bg-red-100 flex items-center"
-                                                                    title="PDF 출력"
-                                                                >
-                                                                    <Printer className="w-3.5 h-3.5" />
-                                                                </button>
-                                                            </div>
-                                                        ) : (
-                                                            <button 
-                                                                onClick={(e) => { e.stopPropagation(); setEditingItemIdx(idx); }}
-                                                                className="text-[12px] font-bold px-2.5 py-1 rounded transition-colors text-blue-600 bg-blue-50 hover:bg-blue-100"
-                                                            >
-                                                                작성
-                                                            </button>
-                                                        )}
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
-                                
-                                {/* Bottom Action Bar for Main Panel */}
-                                <div className="bg-[#F4F4F5] p-3 flex justify-between items-center print:hidden border-t border-[#E4E4E7]">
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                                        <span className="text-[12px] font-bold text-[#52525B]">
-                                            작성 진행률: {selectedSku.bom.filter((_, i) => writtenOrders[`${selectedSku.id}-${i}`]).length} / {selectedSku.bom.length}
-                                        </span>
-                                    </div>
-                                    {selectedSku.bom.filter((_, i) => writtenOrders[`${selectedSku.id}-${i}`]).length === selectedSku.bom.length && (
-                                        <span className="text-[12px] font-black text-emerald-600 flex items-center gap-1">
-                                            <CheckCircle2 className="w-4 h-4" /> 모든 발주서 작성 완료
-                                        </span>
-                                    )}
+                                                return (
+                                                    <tr key={cfg.id} className="hover:bg-[#FAFAFA]">
+                                                        <td className="py-3 px-3">
+                                                            <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-black border ${catColor}`}>
+                                                                {cfg.category}
+                                                            </span>
+                                                        </td>
+                                                        <td className="py-3 px-3 max-w-[180px] truncate" title={cfg.name}>
+                                                            <p className="font-bold text-[#3F3F46] truncate">{cfg.name}</p>
+                                                            <p className="font-mono text-[10px] text-[#A1A1AA]">{cfg.code}</p>
+                                                        </td>
+                                                        <td className="py-3 px-3 text-right font-mono font-bold text-[#71717A]">
+                                                            {(cfg.category === '내용물' ? cfg.price * cfg.qtyPerUnit : cfg.price).toLocaleString()}원
+                                                        </td>
+                                                        <td className="py-3 px-3 text-right font-mono font-bold text-[#09090B]">
+                                                            {totalReq.toLocaleString()} <span className="text-[10px] text-[#71717A] uppercase">{cfg.unit}</span>
+                                                        </td>
+                                                        <td className="py-2 px-2 print:py-3 print:px-3">
+                                                            <input 
+                                                                type="text" 
+                                                                value={cfg.supplier}
+                                                                onChange={(e) => handleSubSupplierChange(idx, e.target.value)}
+                                                                className="w-28 px-2 py-1 border border-[#E4E4E7] rounded-lg text-xs font-bold text-[#3F3F46] focus:outline-none focus:border-[#09090B] print:border-none print:w-auto print:p-0"
+                                                            />
+                                                        </td>
+                                                        <td className="py-2 px-2 print:py-3 print:px-3">
+                                                            <input 
+                                                                type="date" 
+                                                                value={cfg.deliveryDate}
+                                                                onChange={(e) => handleSubDateChange(idx, e.target.value)}
+                                                                className="px-2 py-1 border border-[#E4E4E7] rounded-lg text-xs font-medium text-[#3F3F46] focus:outline-none focus:border-[#09090B] print:border-none print:w-auto print:p-0"
+                                                            />
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
                         </div>
-                    </>
+
+                        {/* Hidden Printable Document for window.print() */}
+                        <div className="hidden print:flex print:flex-col font-serif text-black p-6 max-w-4xl mx-auto min-h-[245mm]">
+                            <div className="flex-1">
+                                <div className="relative mb-8 border-b-4 border-black pb-6 min-h-[105px]">
+                                    <div className="text-left pt-2">
+                                        <h1 className="text-4xl font-black tracking-[0.3em] mb-3">발주서</h1>
+                                        <p className="text-xs font-mono text-gray-700">문서 번호: PO-{new Date().toISOString().slice(2,10).replace(/-/g,'')}-{selectedSku.id.replace('FG-', '')}</p>
+                                    </div>
+                                    
+                                    {/* Approval Line (결재란) */}
+                                    <div className="absolute right-0 top-0 flex items-center text-center text-xs shrink-0 border-2 border-slate-300 rounded-xl overflow-hidden bg-white shadow-sm">
+                                        <div className="bg-slate-50 font-black text-[12px] text-slate-500 py-4 px-2.5 border-r-2 border-slate-300 w-8 flex items-center justify-center leading-tight">
+                                            결<br/>재
+                                        </div>
+                                        <div className="flex divide-x-2 divide-slate-300">
+                                            <div className="flex flex-col w-16">
+                                                <div className="bg-slate-50/80 font-black text-[11px] text-slate-500 py-1.5 border-b-2 border-slate-300">담당</div>
+                                                <div className="h-12 flex items-center justify-center text-[9px] text-slate-300 font-semibold"></div>
+                                            </div>
+                                            <div className="flex flex-col w-16">
+                                                <div className="bg-slate-50/80 font-black text-[11px] text-slate-500 py-1.5 border-b-2 border-slate-300">팀장</div>
+                                                <div className="h-12 flex items-center justify-center text-[9px] text-slate-300 font-semibold"></div>
+                                            </div>
+                                            <div className="flex flex-col w-16">
+                                                <div className="bg-slate-50/80 font-black text-[11px] text-slate-500 py-1.5 border-b-2 border-slate-300">본부장</div>
+                                                <div className="h-12 flex items-center justify-center text-[9px] text-slate-300 font-semibold"></div>
+                                            </div>
+                                            <div className="flex flex-col w-16">
+                                                <div className="bg-slate-50/80 font-black text-[11px] text-slate-500 py-1.5 border-b-2 border-slate-300">대표이사</div>
+                                                <div className="h-12 flex items-center justify-center text-[9px] text-slate-300 font-semibold"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-8 mb-8 text-sm">
+                                    <div>
+                                        <h3 className="font-bold text-base mb-2 border-b border-black pb-1">발 주 사 (Buyer)</h3>
+                                        <p className="font-bold text-gray-800">업체명: (주)코스메틱</p>
+                                        <p>주소: 서울시 강남구 테헤란로 123</p>
+                                        <p>담당자: SCM 운영팀 담당자</p>
+                                        <p>입고지: {deliveryLocation}</p>
+                                    </div>
+                                    <div>
+                                        <h3 className="font-bold text-base mb-2 border-b border-black pb-1">공 급 사 (Supplier)</h3>
+                                        <p className="font-bold text-gray-800">업체명: {odmSupplier}</p>
+                                        <p>담당자: ODM 영업 총괄팀</p>
+                                        <p>발주일자: {new Date().toISOString().slice(0, 10).replace(/-/g, '.')}</p>
+                                        <p className="font-bold">납기기한: {deliveryDate.replace(/-/g, '.')}</p>
+                                    </div>
+                                </div>
+
+                                <div className="mb-8">
+                                    <h3 className="font-bold text-base mb-3 border-b border-black pb-1">발주 내역 (Finished Product Order Details)</h3>
+                                    <table className="w-full text-left border-collapse border border-black text-sm">
+                                        <thead>
+                                            <tr className="bg-gray-100 border-b border-black font-bold">
+                                                <th className="py-2.5 px-3 border-r border-black text-center whitespace-nowrap">품목명</th>
+                                                <th className="py-2.5 px-3 border-r border-black text-center whitespace-nowrap w-24">수량</th>
+                                                <th className="py-2.5 px-3 border-r border-black text-center whitespace-nowrap w-28">단가</th>
+                                                <th className="py-2.5 px-3 border-r border-black text-center whitespace-nowrap w-36">합계금액</th>
+                                                <th className="py-2.5 px-3 text-center whitespace-nowrap w-32">납기예정일</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr className="border-b border-black font-bold text-[13px]">
+                                                <td className="py-2.5 px-3 border-r border-black text-center whitespace-nowrap">{selectedSku.name}</td>
+                                                <td className="py-2.5 px-3 border-r border-black text-center font-mono whitespace-nowrap">{orderQty} EA</td>
+                                                <td className="py-2.5 px-3 border-r border-black text-center font-mono whitespace-nowrap">{unitPrice}원</td>
+                                                <td className="py-2.5 px-3 border-r border-black text-center font-mono whitespace-nowrap">{totalOrderCost.toLocaleString()}원</td>
+                                                <td className="py-2.5 px-3 text-center font-mono whitespace-nowrap">{deliveryDate.replace(/-/g, '.')}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                {remarks && (
+                                    <div className="mb-6 p-3 border border-black text-xs">
+                                        <p className="font-bold mb-1">[특이사항]</p>
+                                        <p>{remarks}</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="mt-auto">
+                                <h3 className="font-bold text-sm mb-3 border-b border-black pb-1">유의사항 (Precautionary Notes)</h3>
+                                <ul className="list-decimal pl-5 text-xs space-y-1.5 text-gray-700 font-sans leading-relaxed">
+                                    <li>본 발주서에 명시된 납기예정일을 엄수하여 주시기 바라며, 일정 변경이 불가피한 경우 반드시 사전 서면 협의를 거쳐야 합니다.</li>
+                                    <li>납품 시 제조업체의 공인 시험성적서(COA) 및 규격 기준에 부합하는 완제품검사보고서를 입고처에 제출해 주시기 바랍니다.</li>
+                                    <li>모든 원료 및 부자재는 사전 승인된 규격 및 BOM 사양과 완전히 일치해야 하며, 임의 사양 변경 시 반품 처리될 수 있습니다.</li>
+                                    <li>운송 및 하차 과정에서 제품 파손 및 오염이 발생하지 않도록 철저히 포장하여 지정된 입고처로 납품 바랍니다.</li>
+                                    <li>본 발주 내용 및 단가 등 거래상 취득한 모든 정보는 기밀 정보로 취급하며, 상대방 동의 없이 제3자에게 누설해서는 안 됩니다.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
                 ) : (
-                    <div className="flex-1 flex flex-col items-center justify-center text-[#A1A1AA] print:hidden">
+                    <div className="flex-1 flex flex-col items-center justify-center text-[#A1A1AA] py-32 print:hidden">
                         <PackageOpen className="w-16 h-16 mb-4 opacity-20" />
-                        <p className="text-[15px] font-black text-[#3F3F46]">발주할 품목을 선택하세요</p>
-                        <p className="text-[13px] font-medium mt-1">좌측 목록에서 완제품을 선택하면 BOM 명세가 나타납니다.</p>
+                        <p className="text-[15px] font-black text-[#3F3F46]">발주할 완제품을 선택하세요</p>
+                        <p className="text-[13px] font-medium mt-1">좌측 목록에서 완제품(SKU)을 선택하면 ODM 발주 등록 양식이 로드됩니다.</p>
                     </div>
                 )}
             </div>
 
-            {/* =======================================
-                COLUMN 3: Order Form (Right Drawer Overlay/Pane)
-            ======================================= */}
-            <div className={`fixed top-0 right-0 h-full w-[420px] bg-white border-l border-[#E4E4E7] shadow-2xl transition-transform duration-300 ease-in-out z-50 flex flex-col print:relative print:w-full print:shadow-none print:border-none print:transform-none
-                ${editingItemIdx !== null ? 'translate-x-0' : 'translate-x-full print:hidden'}`}>
-                
-                {activeItem && selectedSku && (
-                    <>
-                        {/* Drawer Header */}
-                        <div className="h-16 border-b border-[#E4E4E7] flex items-center justify-between px-5 bg-[#FAFAFA] shrink-0 print:hidden">
-                            <div className="flex items-center gap-2">
-                                <FileText className="w-4 h-4 text-[#09090B]" />
-                                <span className="text-[14px] font-black text-[#09090B]">발주서 작성</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                {writtenOrders[`${selectedSku.id}-${editingItemIdx!}`] && (
-                                    <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-black rounded-sm border border-emerald-200">
-                                        작성완료
-                                    </span>
-                                )}
-                                <button onClick={() => setEditingItemIdx(null)} className="p-1 hover:bg-[#E4E4E7] rounded-md text-[#71717A] transition-colors">
-                                    <X className="w-5 h-5" />
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Drawer Content */}
-                        <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6 print:p-0">
-                            {/* Document Title for Print */}
-                            <div className="hidden print:block text-center mb-8 border-b-2 border-black pb-4">
-                                <h1 className="text-3xl font-black text-black tracking-widest">발 주 서</h1>
-                            </div>
-
-                            {/* Info Card */}
-                            <div className="bg-[#FAFAFA] border border-[#E4E4E7] rounded-xl p-4">
-                                <div className="flex justify-between items-start mb-3">
-                                    <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-black border bg-white
-                                        ${activeItem.category === '내용물' ? 'text-emerald-700 border-emerald-200' : 'text-blue-700 border-blue-200'}`}>
-                                        {activeItem.category}
-                                    </span>
-                                    <span className="text-[11px] font-mono font-bold text-[#A1A1AA] bg-white px-1.5 border border-[#E4E4E7] rounded">
-                                        문서번호: PO-{new Date().toISOString().slice(2,10).replace(/-/g,'')}-{String(editingItemIdx!+1).padStart(3, '0')}
-                                    </span>
-                                </div>
-                                <h3 className="text-[18px] font-black text-[#09090B] leading-tight mb-1">{activeItem.name}</h3>
-                                <p className="font-mono text-[12px] text-[#71717A] mb-4">Code: {activeItem.code}</p>
-                                
-                                <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-[13px]">
-                                    <div>
-                                        <p className="text-[11px] font-bold text-[#A1A1AA] mb-0.5">대상 완제품</p>
-                                        <p className="font-bold text-[#3F3F46] truncate">{selectedSku.name}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-[11px] font-bold text-[#A1A1AA] mb-0.5">발주 공급처</p>
-                                        <p className="font-bold text-[#3F3F46] truncate">{activeItem.supplier || '미정'}</p>
-                                    </div>
-                                    <div className="col-span-2 mt-2 pt-3 border-t border-[#E4E4E7] flex justify-between items-center bg-[#F4F4F5] p-3 rounded-lg print:bg-transparent print:p-0 print:border-none print:mt-0">
-                                        <p className="text-[12px] font-black text-[#52525B]">최종 발주 총액</p>
-                                        <p className="font-mono text-lg font-black text-[#09090B]">
-                                            {((parseFloat(customQty) || 0) * (parseFloat(customPrice) || 0)).toLocaleString()} <span className="text-[12px] font-bold text-[#71717A]">원</span>
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Form Inputs */}
-                            <div className="flex flex-col gap-5 print:mt-4">
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-[12px] font-bold text-[#3F3F46] mb-1.5">발주 수량 <span className="text-red-500">*</span></label>
-                                        <div className="relative">
-                                            <input 
-                                                type="number" 
-                                                value={customQty}
-                                                onChange={(e) => setCustomQty(e.target.value)}
-                                                className="w-full pl-3 pr-8 py-2 bg-white border border-[#E4E4E7] rounded-lg text-[13px] font-mono font-black text-[#09090B] focus:outline-none focus:ring-2 focus:ring-[#09090B]/10 focus:border-[#09090B] transition-all" 
-                                            />
-                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-[#A1A1AA] uppercase">{activeItem.unit}</span>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="block text-[12px] font-bold text-[#3F3F46] mb-1.5">단가 (원) <span className="text-red-500">*</span></label>
-                                        <div className="relative">
-                                            <input 
-                                                type="number" 
-                                                value={customPrice}
-                                                onChange={(e) => setCustomPrice(e.target.value)}
-                                                className="w-full pl-3 pr-8 py-2 bg-white border border-[#E4E4E7] rounded-lg text-[13px] font-mono font-black text-[#09090B] focus:outline-none focus:ring-2 focus:ring-[#09090B]/10 focus:border-[#09090B] transition-all" 
-                                            />
-                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-[#A1A1AA]">원</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-[12px] font-bold text-[#3F3F46] mb-1.5">납기 요청일 <span className="text-red-500">*</span></label>
-                                    <input 
-                                        type="date" 
-                                        value={deliveryDate}
-                                        onChange={(e) => setDeliveryDate(e.target.value)}
-                                        className="w-full px-3 py-2 bg-white border border-[#E4E4E7] rounded-lg text-[13px] font-medium text-[#09090B] focus:outline-none focus:ring-2 focus:ring-[#09090B]/10 focus:border-[#09090B] transition-all" 
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-[12px] font-bold text-[#3F3F46] mb-1.5">입고지 (배송지) <span className="text-red-500">*</span></label>
-                                    <input 
-                                        type="text" 
-                                        value={deliveryLocation}
-                                        onChange={(e) => setDeliveryLocation(e.target.value)}
-                                        placeholder="(주)코스메틱 제1공장" 
-                                        className="w-full px-3 py-2 bg-white border border-[#E4E4E7] rounded-lg text-[13px] font-medium text-[#09090B] focus:outline-none focus:ring-2 focus:ring-[#09090B]/10 focus:border-[#09090B] transition-all" 
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-[12px] font-bold text-[#3F3F46] mb-1.5">특이사항 (요청사항)</label>
-                                    <textarea rows={4} placeholder="납기 관련이나 포장 등 요청사항을 기재하세요." className="w-full px-3 py-2 bg-white border border-[#E4E4E7] rounded-lg text-[13px] font-medium text-[#09090B] focus:outline-none focus:ring-2 focus:ring-[#09090B]/10 focus:border-[#09090B] transition-all resize-none"></textarea>
-                                </div>
-                            </div>
-                            
-                            {/* Signatures for Print */}
-                            <div className="hidden print:flex justify-end gap-12 mt-12 pt-8 border-t border-[#E4E4E7]">
-                                <div className="text-center">
-                                    <p className="text-[13px] font-bold mb-8">담당자</p>
-                                    <p className="text-[14px]">(인)</p>
-                                </div>
-                                <div className="text-center">
-                                    <p className="text-[13px] font-bold mb-8">책임자</p>
-                                    <p className="text-[14px]">(인)</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Drawer Footer Actions */}
-                        <div className="p-5 border-t border-[#E4E4E7] bg-[#F4F4F5] shrink-0 flex items-center justify-between print:hidden">
-                            {writtenOrders[`${selectedSku.id}-${editingItemIdx!}`] ? (
-                                <button 
-                                    onClick={() => window.print()}
-                                    className="px-4 py-2.5 bg-red-50 text-red-600 border border-red-200 rounded-lg text-[13px] font-black hover:bg-red-100 flex items-center gap-1.5 transition-colors shadow-sm"
-                                >
-                                    <Printer className="w-4 h-4" /> PDF 출력
-                                </button>
-                            ) : <div></div>}
-                            
-                            <div className="flex gap-2">
-                                <button 
-                                    onClick={() => setEditingItemIdx(null)}
-                                    className="px-4 py-2.5 bg-white border border-[#E4E4E7] text-[#71717A] rounded-lg text-[13px] font-bold hover:bg-[#FAFAFA] transition-colors shadow-sm"
-                                >
-                                    취소
-                                </button>
-                                <button 
-                                    disabled={!isFormValid}
-                                    onClick={() => {
-                                        const key = `${selectedSku.id}-${editingItemIdx!}`;
-                                        setWrittenOrders(prev => ({ ...prev, [key]: true }));
-                                        setOrderFormData(prev => ({
-                                            ...prev,
-                                            [key]: {
-                                                qty: customQty,
-                                                price: customPrice,
-                                                date: deliveryDate,
-                                                location: deliveryLocation
-                                            }
-                                        }));
-                                        
-                                        // Optional: Auto move to next item
-                                        const nextIdx = editingItemIdx! + 1;
-                                        if (nextIdx < selectedSku.bom.length) {
-                                            setEditingItemIdx(nextIdx);
-                                        } else {
-                                            setEditingItemIdx(null);
-                                        }
-                                    }}
-                                    className={`px-6 py-2.5 rounded-lg text-[13px] font-black transition-all flex items-center gap-1.5 
-                                        ${isFormValid 
-                                            ? 'bg-[#09090B] text-white shadow-[0_4px_12px_rgba(0,0,0,0.15)] hover:bg-black active:scale-95' 
-                                            : 'bg-[#E4E4E7] text-[#A1A1AA] cursor-not-allowed shadow-none'}`}
-                                >
-                                    {writtenOrders[`${selectedSku.id}-${editingItemIdx!}`] ? <><Save className="w-4 h-4" />수정 사항 저장</> : <><CheckCircle2 className="w-4 h-4" />발주서 작성 완료</>}
-                                </button>
-                            </div>
-                        </div>
-                    </>
-                )}
-            </div>
-
-            {/* Print Override Overlay (Hides everything except the Drawer when printing) */}
+            {/* Print Override Overlay */}
             <style>{`
                 @media print {
+                    @page {
+                        size: A4;
+                        margin: 10mm 15mm;
+                    }
                     body * { visibility: hidden; }
-                    .print\\:block, .print\\:block * { visibility: visible; }
+                    .print\\:block, .print\\:flex, .print\\:block *, .print\\:flex * { visibility: visible; }
                     .print\\:relative { visibility: visible; position: absolute; left: 0; top: 0; width: 100%; height: auto; }
                     .print\\:relative * { visibility: visible; }
                     .print\\:hidden { display: none !important; }

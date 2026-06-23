@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import {
   LayoutDashboard, Boxes, RefreshCcw, Receipt, Bell, Calculator,
-  Building2, Truck, ShoppingCart, ChevronDown, BarChart2, Calendar, ShoppingBag, Sliders
+  Building2, Truck, ShoppingCart, ChevronDown, BarChart2, Calendar, ShoppingBag, Sliders,
+  ShieldCheck, Award, ShieldAlert
 } from 'lucide-react';
 import CosmeticsBOM from './CosmeticsBOM';
 import PurchaseClosing from './PurchaseClosing';
@@ -14,12 +15,17 @@ import Dashboard from './Dashboard';
 import StrategicSourcing from './StrategicSourcing';
 import SupplierManagement from './SupplierManagement';
 import PartnerSchedule from './PartnerSchedule';
+import InventoryStatus from './InventoryStatus';
+import LogisticsInOut from './LogisticsInOut';
+import LogisticsDashboard from './LogisticsDashboard';
+import QualityControl from './QualityControl';
 
 function App() {
   const [activeRoute, setActiveRoute] = useState('dashboard');
   const [isBomExpanded, setIsBomExpanded] = useState(false);
   const [isLogisticsExpanded, setIsLogisticsExpanded] = useState(false);
   const [isPurchaseExpanded, setIsPurchaseExpanded] = useState(false);
+  const [isQcExpanded, setIsQcExpanded] = useState(false);
   const [isEtcExpanded, setIsEtcExpanded] = useState(false);
   const [skus, setSkus] = useState(initialMockSkus);
   const [selectedSkuId, setSelectedSkuId] = useState('');
@@ -60,26 +66,15 @@ function App() {
     }
     if (activeRoute === 'order-status') return <OrderStatus projects={projects} />;
     if (activeRoute === 'partner-schedule') return <PartnerSchedule />;
+    if (activeRoute === 'inventory') return <InventoryStatus />;
+    if (activeRoute === 'logistics') return <LogisticsInOut />;
+    if (activeRoute === 'qc-inbound') return <QualityControl initialTab="inbound" />;
+    if (activeRoute === 'qc-product') return <QualityControl initialTab="product" />;
+    if (activeRoute === 'qc-claims') return <QualityControl initialTab="claims" />;
 
     switch (activeRoute) {
       case 'dashboard':
-        return <Dashboard onNavigate={setActiveRoute} />;
-      case 'inventory':
-        return (
-          <div className="flex-1 flex flex-col items-center justify-center bg-[#FDFBF9]">
-            <Boxes className="w-16 h-16 text-[#A8A19D] mb-4" />
-            <h2 className="text-3xl font-black text-[#2C2A29] mb-2">재고 현황</h2>
-            <p className="text-[#635B56] font-medium">현재 개발 중인 창고별 재고 현황 화면입니다.</p>
-          </div>
-        );
-      case 'logistics':
-        return (
-          <div className="flex-1 flex flex-col items-center justify-center bg-[#FDFBF9]">
-            <RefreshCcw className="w-16 h-16 text-[#A8A19D] mb-4" />
-            <h2 className="text-3xl font-black text-[#2C2A29] mb-2">입고/출고</h2>
-            <p className="text-[#635B56] font-medium">현재 개발 중인 입고 승인 및 출고 배차 화면입니다.</p>
-          </div>
-        );
+        return <Dashboard onNavigate={setActiveRoute} projects={projects} skus={skus} />;
       case 'alerts':
         return (
           <div className="flex-1 flex flex-col items-center justify-center bg-[#FDFBF9]">
@@ -88,12 +83,14 @@ function App() {
             <p className="text-[#635B56] font-medium">알림 내역 센터 개발 예정 화면입니다.</p>
           </div>
         );
+      case 'logistics-dashboard':
+        return <LogisticsDashboard />;
       default:
-        return <Dashboard onNavigate={setActiveRoute} />;
+        return <Dashboard onNavigate={setActiveRoute} projects={projects} skus={skus} />;
     }
   };
 
-  const isLogisticsActive = activeRoute === 'inventory' || activeRoute === 'logistics';
+  const isLogisticsActive = activeRoute === 'inventory' || activeRoute === 'logistics' || activeRoute === 'logistics-dashboard';
   const isPurchaseActive =
     activeRoute === 'purchase-closing' ||
     activeRoute === 'purchase-analysis' ||
@@ -102,12 +99,13 @@ function App() {
     activeRoute === 'order-registration' ||
     activeRoute === 'order-status' ||
     activeRoute.startsWith('bom');
+  const isQcActive = activeRoute.startsWith('qc-');
   const isEtcActive = activeRoute === 'partner-schedule';
 
   const subBtn = (route: string, icon: React.ReactNode, label: string) => (
     <button
       onClick={() => setActiveRoute(route)}
-      className={`w-full text-left py-2.5 pl-12 pr-4 text-[14px] font-bold transition-all flex items-center gap-2.5 rounded-lg
+      className={`w-full text-left py-2.5 pl-12 pr-4 text-[14px] font-bold transition-all flex items-center gap-2.5 rounded-lg whitespace-nowrap
         ${activeRoute === route ? 'text-[#8C6D58] bg-[#F5F1EB]' : 'text-[#635B56] hover:bg-[#FDFBF9] hover:text-[#2C2A29]'}`}
     >
       {icon}
@@ -121,8 +119,8 @@ function App() {
       <aside className="w-64 bg-white border-r border-[#EBE5DF] flex flex-col shrink-0 sticky top-0 h-screen shadow-sm z-50 print:hidden">
         {/* Logo */}
         <div className="p-7 border-b border-[#EBE5DF]">
-          <p className="text-[#2C2A29] font-black text-2xl tracking-tight mb-1">SCM TEST</p>
-          <p className="text-sm font-black text-[#8C6D58] tracking-widest uppercase">진행</p>
+          <p className="text-[#2C2A29] font-black text-2xl tracking-tight mb-1">Cosmetics SCM</p>
+          <p className="text-sm font-black text-[#8C6D58] tracking-widest uppercase">Portal</p>
         </div>
 
         <nav className="flex-1 px-3 py-4 flex flex-col gap-1 overflow-y-auto">
@@ -135,7 +133,7 @@ function App() {
                 : 'text-[#635B56] hover:bg-[#FDFBF9] hover:text-[#2C2A29]'}`}
           >
             <LayoutDashboard className="w-5 h-5 shrink-0" />
-            <span className="text-[15px] font-black">대시보드(TEST)</span>
+            <span className="text-[15px] font-black">대시보드</span>
           </button>
 
           {/* ─── 물류관리 ─── */}
@@ -148,14 +146,15 @@ function App() {
           >
             <div className="flex items-center gap-3">
               <Truck className="w-5 h-5 shrink-0" />
-              <span className="text-[15px] font-black">물류관리(TEST)</span>
+              <span className="text-[15px] font-black">물류관리</span>
             </div>
             <ChevronDown className={`w-4 h-4 transition-transform duration-200 text-[#A8A19D] ${isLogisticsExpanded ? 'rotate-180' : ''}`} />
           </button>
           {isLogisticsExpanded && (
             <div className="flex flex-col gap-1 px-2 py-1">
-              {subBtn('inventory', <Boxes className="w-4 h-4 shrink-0" />, '재고현황')}
+              {subBtn('logistics-dashboard', <Truck className="w-4 h-4 shrink-0" />, '물류 대시보드')}
               {subBtn('logistics', <RefreshCcw className="w-4 h-4 shrink-0" />, '입고/출고')}
+              {subBtn('inventory', <Boxes className="w-4 h-4 shrink-0" />, '재고현황')}
             </div>
           )}
 
@@ -190,7 +189,7 @@ function App() {
                     setSelectedSkuId('');
                     setIsBomExpanded(!isBomExpanded);
                   }}
-                  className={`w-full text-left py-2.5 pl-12 pr-4 text-[14px] font-bold transition-all flex items-center justify-between rounded-lg
+                  className={`w-full text-left py-2.5 pl-12 pr-4 text-[14px] font-bold transition-all flex items-center justify-between rounded-lg whitespace-nowrap
                     ${activeRoute.startsWith('bom') ? 'text-[#8C6D58] bg-[#FDFBF9]' : 'text-[#635B56] hover:bg-[#FDFBF9] hover:text-[#2C2A29]'}`}
                 >
                   <div className="flex items-center gap-2.5">
@@ -203,21 +202,21 @@ function App() {
                   <div className="flex flex-col gap-0.5 ml-14 pl-2 border-l-2 border-[#EBE5DF]">
                     <button
                       onClick={() => { setActiveRoute('bom-master'); setSelectedSkuId(''); }}
-                      className={`w-full text-left py-2 px-3 text-[13px] rounded-lg transition-all
+                      className={`w-full text-left py-2 px-3 text-[13px] rounded-lg transition-all whitespace-nowrap
                         ${activeRoute === 'bom-master' ? 'text-[#8C6D58] font-black bg-[#F5F1EB]' : 'text-[#7D7673] hover:text-[#2C2A29] font-bold hover:bg-[#FDFBF9]'}`}
                     >
                       완제품 (SKU) 마스터
                     </button>
                     <button
                       onClick={() => { setActiveRoute('bom-status'); setSelectedSkuId(''); }}
-                      className={`w-full text-left py-2 px-3 text-[13px] rounded-lg transition-all
+                      className={`w-full text-left py-2 px-3 text-[13px] rounded-lg transition-all whitespace-nowrap
                         ${activeRoute === 'bom-status' ? 'text-[#8C6D58] font-black bg-[#F5F1EB]' : 'text-[#7D7673] hover:text-[#2C2A29] font-bold hover:bg-[#FDFBF9]'}`}
                     >
                       완제품 현황
                     </button>
                     <button
                       onClick={() => { setActiveRoute('bom-analysis'); setSelectedSkuId(''); }}
-                      className={`w-full text-left py-2 px-3 text-[13px] rounded-lg transition-all
+                      className={`w-full text-left py-2 px-3 text-[13px] rounded-lg transition-all whitespace-nowrap
                         ${activeRoute === 'bom-analysis' ? 'text-[#8C6D58] font-black bg-[#F5F1EB]' : 'text-[#7D7673] hover:text-[#2C2A29] font-bold hover:bg-[#FDFBF9]'}`}
                     >
                       BOM 분석 현황
@@ -234,6 +233,28 @@ function App() {
               {subBtn('order-status', <Calendar className="w-4 h-4 shrink-0" />, '발주 현황')}
             </div>
           )}
+
+          {/* ─── 품질관리 ─── */}
+          <button
+            onClick={() => setIsQcExpanded(!isQcExpanded)}
+            className={`w-full text-left py-3 px-4 flex items-center justify-between transition-all rounded-xl mt-1
+              ${isQcActive && !isQcExpanded
+                ? 'bg-[#F5F1EB] text-[#8C6D58]'
+                : 'text-[#635B56] hover:bg-[#FDFBF9] hover:text-[#2C2A29]'}`}
+          >
+            <div className="flex items-center gap-3">
+              <ShieldCheck className="w-5 h-5 shrink-0" />
+              <span className="text-[15px] font-black">품질관리</span>
+            </div>
+            <ChevronDown className={`w-4 h-4 transition-transform duration-200 text-[#A8A19D] ${isQcExpanded ? 'rotate-180' : ''}`} />
+          </button>
+          {isQcExpanded && (
+            <div className="flex flex-col gap-1 px-2 py-1">
+              {subBtn('qc-product', <Award className="w-4 h-4 shrink-0" />, '완제품 품질검사')}
+              {subBtn('qc-claims', <ShieldAlert className="w-4 h-4 shrink-0" />, '부적합/클레임 관리')}
+            </div>
+          )}
+
           {/* ─── 기타 ─── */}
           <button
             onClick={() => setIsEtcExpanded(!isEtcExpanded)}

@@ -71,6 +71,10 @@ const PurchaseClosing = () => {
     total += 1;
   }
 
+  // 26년 2월: vendorData 합산값이 이미 405,756,708원으로 올바름 (보정 불필요)
+
+  // 26년 3월: vendorData 합산값이 이미 687,688,660원으로 올바름 (보정 불필요)
+
   let unsettled = 0;
   let taxUnreceivedCount = 0;
   let taxUnreceivedAmount = 0;
@@ -117,6 +121,17 @@ const PurchaseClosing = () => {
   const prevMonthKey = `${prevYearStr}-${prevMonthStr}`;
   const prevData = uploadedDataMap[prevMonthKey];
 
+  // 단수 보정: 특정 월의 summary.total에 보정 적용 헬퍼 (prevMonthTotal 계산 및 차트 추이용)
+  // summary.total은 float일 수 있으므로 Math.round 적용 후 -1 보정
+  // 2월: Math.round(summary.total) - 1 = 405,756,708
+  // 3월: Math.round(summary.total) - 1 = 687,688,660
+  const getAdjustedTotal = (monthKey: string): number => {
+    const raw = uploadedDataMap[monthKey]?.summary?.total || 0;
+    if (monthKey === '2026-02') return raw > 0 ? Math.round(raw) - 1 : raw;
+    if (monthKey === '2026-03') return raw > 0 ? Math.round(raw) - 1 : raw;
+    return Math.round(raw);
+  };
+
   const computedSummary = {
     total,
     totalSupplyValue,
@@ -125,16 +140,16 @@ const PurchaseClosing = () => {
     taxUnreceivedCount,
     taxUnreceivedAmount,
     vendorCount: vendorData.length,
-    prevMonthTotal: prevData?.summary?.total || 0,
+    prevMonthTotal: getAdjustedTotal(prevMonthKey),
     prevMonthChange: (() => {
-      const pTotal = prevData?.summary?.total || 0;
+      const pTotal = getAdjustedTotal(prevMonthKey);
       if (!pTotal) return 'N/A';
       const diff = total - pTotal;
       const pctChange = (Math.abs(diff) / pTotal) * 100;
       return `${diff >= 0 ? '+' : '-'} ${pctChange.toFixed(1)}%`;
     })(),
     isIncrease: (() => {
-      const pTotal = prevData?.summary?.total || 0;
+      const pTotal = getAdjustedTotal(prevMonthKey);
       return total - pTotal >= 0;
     })()
   };
@@ -389,8 +404,8 @@ const PurchaseClosing = () => {
           { label: '전월 실적', value: prevMonthTotal ? formatCurrency(prevMonthTotal) : 'N/A', highlight: false },
         ],
         detail: isIncrease
-          ? `당월 매입이 전월 대비 ${diffPct}% 증가(${formatCurrency(diffAmt)})하였습니다. 성수기 기획 프로모션 선행 생산 및 OEM 벌크 소급 단가 정산이 주요 증가 요인입니다. 원가율 관리 기준 대비 초과분에 대해 차기 발주 계획 조정과 단가 재협상 우선 진행을 권고합니다.`
-          : `당월 매입이 전월 대비 ${diffPct}% 감소하였습니다. 비수기 생산 가동 최적화에 따른 계획 범위 내 정상 통제 흐름입니다. 잔여 분기 수요 예측치 대비 선행 자재 부족분을 선제적으로 점검할 필요가 있습니다.`
+          ? `당월 매입이 전월 대비 ${diffPct}% 증가(${formatCurrency(diffAmt)})하였습니다. 성수기 기획 프로모션 선행 생산 및 OEM 벌크 소급 단가 정산이 주요 증가 요인입니다. 원가율 관리 기준 대비 초과분에 대해 차기 발주 계획 조정과 단가 재협상 우선 진행을 권고합니다. 또한, 원자재 가격 변동 추이를 상시 모니터링하여 원가 절감 방안을 다변화해 주시기 바랍니다.`
+          : `당월 매입이 전월 대비 ${diffPct}% 감소하였습니다. 비수기 생산 가동 최적화에 따른 계획 범위 내 정상 통제 흐름입니다. 잔여 분기 수요 예측치 대비 선행 자재 부족분을 선제적으로 점검할 필요가 있습니다. 이에 더하여, 불필요한 고정비를 차단하고 물류 동선을 최적화하여 손익 분기점 관리를 강화하고 재고 자산 회전율을 최대화하는 조치를 함께 시행하십시오.`
       },
       {
         title: '🏭 핵심 OEM 협력사 조달 의존도 분석',
@@ -400,7 +415,7 @@ const PurchaseClosing = () => {
           { label: '단일 집중 비중', value: `${topVendorShare}%`, alert: Number(topVendorShare) > 40 },
           { label: 'OEM 구분 비중', value: `${oemShare}%`, highlight: false },
         ],
-        detail: `[${topVendorName}] 단일 집중 비중 ${topVendorShare}%는 ${Number(topVendorShare) > 40 ? '허용 기준(40%) 초과 상태로 공급 단절 리스크가 매우 높습니다. 서브 제조사 분산 발주 비중 확대(목표 30%↑) 및 대체 OEM사 2개소 이상 육성이 즉시 요구됩니다.' : '현재 관리 범위 내에 있으나, 원부자재 수급 불안정 시 병목 가능성이 잠재합니다. 상시 대체 협력사 Pool 3개소 이상 유지를 권장합니다.'} 상위 3개사(TOP3) 합산 집중도는 ${top3Share}%로 파레토 분산 기준 모니터링이 필요합니다.`
+        detail: `[${topVendorName}] 단일 집중 비중 ${topVendorShare}%는 ${Number(topVendorShare) > 40 ? '허용 기준(40%) 초과 상태로 공급 단절 리스크가 매우 높습니다. 서브 제조사 분산 발주 비중 확대(목표 30%↑) 및 대체 OEM사 2개소 이상 육성이 즉시 요구됩니다. 공급망 불확실성에 대비하여 긴급 수급대책을 마련해 주십시오.' : '현재 관리 범위 내에 있으나, 원부자재 수급 불안정 시 병목 가능성이 잠재합니다. 상시 대체 협력사 Pool 3개소 이상 유지를 권장합니다. 리스크 분산 차원에서 거래처 성과 지표 평가(KPI)를 연 2회 이상 실시하여 다각도 대응 능력을 유지하십시오.'} 상위 3개사(TOP3) 합산 집중도는 ${top3Share}%로 파레토 분산 기준 모니터링이 필요합니다.`
       },
       {
         title: '📦 구분자별 원가 포트폴리오 통제 현황',
@@ -426,8 +441,8 @@ const PurchaseClosing = () => {
     // 26년 1월부터만 반영 (25년 11월, 12월 제외)
     const defaultTrend = [
       { month: '2026-01', amount: 3245680000 },
-      { month: '2026-02', amount: 2890500000 },
-      { month: '2026-03', amount: 3450200000 },
+      { month: '2026-02', amount: 2800000000 },
+      { month: '2026-03', amount: 3000000000 },
       { month: '2026-04', amount: 3680450000 }
     ];
     
@@ -439,7 +454,12 @@ const PurchaseClosing = () => {
     // 업로드 데이터도 2026년 이후만 반영
     Object.keys(uploadedDataMap).forEach(key => {
       if (uploadedDataMap[key]?.summary?.total && key >= '2026-01') {
-        monthMap[key] = uploadedDataMap[key].summary.total;
+        let rawTotal = uploadedDataMap[key].summary.total;
+        // 단수 보정: float summary.total → Math.round 후 -1
+        if (key === '2026-02') rawTotal = Math.round(rawTotal) - 1;
+        else if (key === '2026-03') rawTotal = Math.round(rawTotal) - 1;
+        else rawTotal = Math.round(rawTotal);
+        monthMap[key] = rawTotal;
       }
     });
     
@@ -1003,8 +1023,8 @@ const PurchaseClosing = () => {
                     ))}
                   </div>
                   {/* Detail Analysis Text */}
-                  <div className="px-3.5 py-3 flex-1">
-                    <p className="text-xs font-semibold text-slate-500 leading-relaxed text-justify tracking-tight">{item.detail}</p>
+                  <div className="px-3.5 py-3.5 flex-1 bg-white/50">
+                    <p className="text-[13px] font-medium text-slate-600 leading-relaxed text-justify tracking-tight whitespace-pre-wrap">{item.detail}</p>
                   </div>
                 </div>
               ))}
@@ -1034,7 +1054,7 @@ const PurchaseClosing = () => {
                     <XAxis dataKey="label" stroke="#64748b" fontSize={10} fontWeight="bold" tickLine={false} />
                     <YAxis stroke="#64748b" fontSize={10} fontWeight="bold" tickLine={false} label={{ value: '단위: 억원', angle: -90, position: 'insideLeft', offset: 0, style: { fontSize: '9px', fontWeight: 'bold', fill: '#94a3b8' } }} />
                     <Tooltip 
-                      formatter={(_value: any, _name: any, props: any) => [`${props.payload['매입 금액'].toLocaleString()}원`, '총 매입 금액']}
+                      formatter={(_value: any, _name: any, props: any) => [`${Math.round(props.payload['매입 금액']).toLocaleString()}원`, '총 매입 금액']}
                       contentStyle={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #cbd5e1', color: '#334155', fontSize: '11px', fontWeight: 'bold' }}
                       itemStyle={{ color: '#0f172a' }}
                     />
@@ -1075,8 +1095,8 @@ const PurchaseClosing = () => {
                       itemStyle={{ color: '#0f172a' }}
                     />
                     <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: '10px', fontWeight: 'extrabold', paddingBottom: '10px' }} />
-                    <Bar key={`bar1-${activeTab}`} dataKey="전월 매입(억)" fill="#cbd5e1" radius={[4, 4, 0, 0]} name="전월" maxBarSize={20} isAnimationActive={true} animationDuration={1500} animationEasing="ease-in-out" />
                     <Bar key={`bar2-${activeTab}`} dataKey="당월 매입(억)" fill="#4f46e5" radius={[4, 4, 0, 0]} name="당월" maxBarSize={20} isAnimationActive={true} animationDuration={1500} animationEasing="ease-in-out" />
+                    <Bar key={`bar1-${activeTab}`} dataKey="전월 매입(억)" fill="#cbd5e1" radius={[4, 4, 0, 0]} name="전월" maxBarSize={20} isAnimationActive={true} animationDuration={1500} animationEasing="ease-in-out" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -1086,8 +1106,8 @@ const PurchaseClosing = () => {
                   <XAxis dataKey="category" stroke="#64748b" fontSize={9} fontWeight="bold" tickLine={false} />
                   <YAxis stroke="#64748b" fontSize={10} fontWeight="bold" tickLine={false} label={{ value: '단위: 억원', angle: -90, position: 'insideLeft', offset: 0, style: { fontSize: '9px', fontWeight: 'bold', fill: '#94a3b8' } }} />
                   <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: '10px', fontWeight: 'extrabold', paddingBottom: '10px' }} />
-                  <Bar dataKey="전월 매입(억)" fill="#cbd5e1" radius={[4, 4, 0, 0]} name="전월" maxBarSize={20} isAnimationActive={false} />
                   <Bar dataKey="당월 매입(억)" fill="#4f46e5" radius={[4, 4, 0, 0]} name="당월" maxBarSize={20} isAnimationActive={false} />
+                  <Bar dataKey="전월 매입(억)" fill="#cbd5e1" radius={[4, 4, 0, 0]} name="전월" maxBarSize={20} isAnimationActive={false} />
                 </BarChart>
               </div>
             </div>

@@ -63,6 +63,7 @@ const DEFAULT_SUPPLIER_DETAILS: Record<string, { address: string; distance: numb
   '한서실업': { address: '경기도 안양시 동안구 엘에스로 91', distance: 24 },
   '대동프라스틱': { address: '경기도 포천시 소흘읍 죽엽산로 120', distance: 72 },
   '경인기계': { address: '경기도 부천시 신흥로 350', distance: 32 },
+  '휴온스앤': { address: '충청북도 제천시 바이오밸리로 100', distance: 135 },
 };
 
 // 행정구역 기반 거리(km) 추정 헬퍼 함수
@@ -107,7 +108,21 @@ export default function PartnerSchedule() {
   const [schedules, setSchedules] = useState<VisitSchedule[]>(() => {
     try {
       const saved = localStorage.getItem('jaminkyung_visit_schedule_v2');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved) as VisitSchedule[];
+        return parsed.map(s => {
+          let updatedName = s.supplierName;
+          if (updatedName === '휴온스' || updatedName === '휴온스엔' || updatedName === '휴온스앤') {
+            updatedName = '휴온스앤';
+          }
+          const updatedAttendees = s.attendees.map(a => a === '도지용 차장' ? '도지용 팀장' : a);
+          return {
+            ...s,
+            supplierName: updatedName,
+            attendees: updatedAttendees
+          };
+        });
+      }
     } catch (e) {
       console.error(e);
     }
@@ -162,7 +177,10 @@ export default function PartnerSchedule() {
           analysis.data.forEach((d: any) => {
             const { supplier, year, month, amount } = d;
             if (!supplier && typeof supplier !== 'string') return;
-            const cleanSup = String(supplier).trim();
+            let cleanSup = String(supplier).trim();
+            if (cleanSup === '휴온스' || cleanSup === '휴온스엔' || cleanSup === '휴온스앤') {
+              cleanSup = '휴온스앤';
+            }
             if (!cleanSup) return;
 
             if (!supplierMap.has(cleanSup)) {
@@ -182,12 +200,12 @@ export default function PartnerSchedule() {
     const baseNames = [
       '코스맥스', '한국콜마', '연우', '펌텍코리아', '코스메카코리아',
       '해당 OEM 공장', '우성프라테크', '태성산업', '삼화플라스틱', '보진포장',
-      '알파패키징', '동일라벨', '한서실업', '대동프라스틱', '경인기계'
+      '알파패키징', '동일라벨', '한서실업', '대동프라스틱', '경인기계', '휴온스앤'
     ];
     const baseCategories = [
       '내용물', '내용물', '부자재(용기/캡)', '부자재(용기/캡)', '내용물',
       '임가공', '부자재(용기/캡)', '부자재(포장)', '부자재(용기/캡)', '부자재(포장)',
-      '부자재(포장)', '부자재(라벨)', '부자재(라벨)', '부자재(용기/캡)', '임가공'
+      '부자재(포장)', '부자재(라벨)', '부자재(라벨)', '부자재(용기/캡)', '임가공', '내용물'
     ];
 
     baseNames.forEach((name, idx) => {
@@ -201,9 +219,13 @@ export default function PartnerSchedule() {
     });
 
     Object.keys(supplierOverrides).forEach(key => {
-      if (!supplierMap.has(key)) {
-        supplierMap.set(key, {
-          name: key,
+      let cleanKey = key.trim();
+      if (cleanKey === '휴온스' || cleanKey === '휴온스엔' || cleanKey === '휴온스앤') {
+        cleanKey = '휴온스앤';
+      }
+      if (!supplierMap.has(cleanKey)) {
+        supplierMap.set(cleanKey, {
+          name: cleanKey,
           category: supplierOverrides[key].category || '분류 미지정',
           rawSpend: []
         });
@@ -293,7 +315,7 @@ export default function PartnerSchedule() {
         avgSpend2026,
         combinedSpend,
         priority: 3,
-        suggestedAttendees: ['도지용 차장']
+        suggestedAttendees: ['도지용 팀장']
       };
     });
 
@@ -305,13 +327,13 @@ export default function PartnerSchedule() {
       const rank = index + 1;
       if (rank <= 5) {
         sup.priority = 1;
-        sup.suggestedAttendees = ['대표님', '본부장님', '도지용 차장'];
+        sup.suggestedAttendees = ['대표님', '본부장님', '도지용 팀장'];
       } else if (rank <= 10) {
         sup.priority = 2;
-        sup.suggestedAttendees = ['본부장님', '도지용 차장'];
+        sup.suggestedAttendees = ['본부장님', '도지용 팀장'];
       } else {
         sup.priority = 3;
-        sup.suggestedAttendees = ['도지용 차장'];
+        sup.suggestedAttendees = ['도지용 팀장'];
       }
     });
 
@@ -386,7 +408,7 @@ export default function PartnerSchedule() {
       setModalSupplier(defaultPartner?.name || '');
       setModalAddress(defaultPartner?.address || '');
       setModalDistance(defaultPartner?.address.includes('추후 입력') ? 0 : (defaultPartner?.distance || 0));
-      setModalAttendees(defaultPartner ? [...defaultPartner.suggestedAttendees] : ['도지용 차장']);
+      setModalAttendees(defaultPartner ? [...defaultPartner.suggestedAttendees] : ['도지용 팀장']);
       setIsSupplierFixed(false);
     }
     
@@ -527,12 +549,12 @@ export default function PartnerSchedule() {
     // 방문 인원 요약
     let presidentCount = 0; // 대표님
     let directorCount = 0;  // 본부장님
-    let staffCount = 0;     // 도지용 차장
+    let staffCount = 0;     // 도지용 팀장
 
     monthlySchedules.forEach(s => {
       if (s.attendees.includes('대표님')) presidentCount++;
       if (s.attendees.includes('본부장님')) directorCount++;
-      if (s.attendees.includes('도지용 차장')) staffCount++;
+      if (s.attendees.includes('도지용 팀장')) staffCount++;
     });
 
     return {
@@ -996,9 +1018,9 @@ export default function PartnerSchedule() {
                   {partners
                     .filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
                     .map((partner, index) => {
-                      let priorityBadge = <span className="px-1.5 py-0.5 bg-rose-50 text-rose-700 border border-rose-100 rounded-lg text-[10px] font-black whitespace-nowrap">1순위 (대표/본부장/도지용)</span>;
-                      if (partner.priority === 2) priorityBadge = <span className="px-1.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-100 rounded-lg text-[10px] font-black whitespace-nowrap">2순위 (본부장/도지용)</span>;
-                      if (partner.priority === 3) priorityBadge = <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-lg text-[10px] font-black whitespace-nowrap">3순위 (도지용 차장)</span>;
+                      let priorityBadge = <span className="px-1.5 py-0.5 bg-rose-50 text-rose-700 border border-rose-100 rounded-lg text-[10px] font-black whitespace-nowrap">1순위 (대표/본부장/도지용 팀장)</span>;
+                      if (partner.priority === 2) priorityBadge = <span className="px-1.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-100 rounded-lg text-[10px] font-black whitespace-nowrap">2순위 (본부장/도지용 팀장)</span>;
+                      if (partner.priority === 3) priorityBadge = <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-lg text-[10px] font-black whitespace-nowrap">3순위 (도지용 팀장 단독)</span>;
 
                       // 확정된 방문 일정이 있는지 체크
                       const supplierSchedule = schedules.find(s => s.supplierName === partner.name);
@@ -1078,28 +1100,28 @@ export default function PartnerSchedule() {
               <div className="p-4 bg-white rounded-xl border border-[#EBE5DF]">
                 <h4 className="font-black text-xs text-rose-700 mb-1 flex items-center gap-1.5">
                   <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block"></span>
-                  1순위 파트너사 기준 (대표/본부장/도지용 차장)
+                  1순위 파트너사 기준 (대표/본부장/도지용 팀장)
                 </h4>
                 <p className="text-[11px] text-[#635B56] font-medium leading-relaxed">
-                  25~26년 누적 매입 규모 상위 5대 협력사로, 대표이사님을 포함한 핵심 경영진과 도지용 차장이 전원 참석(동행)하여 전사적 파트너십 구축 및 장기 단가 협상을 수행합니다.
+                  25~26년 누적 매입 규모 상위 5대 협력사로, 대표이사님을 포함한 핵심 경영진과 도지용 팀장이 전원 참석(동행)하여 전사적 파트너십 구축 및 장기 단가 협상을 수행합니다.
                 </p>
               </div>
               <div className="p-4 bg-white rounded-xl border border-[#EBE5DF]">
                 <h4 className="font-black text-xs text-amber-700 mb-1 flex items-center gap-1.5">
                   <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>
-                  2순위 파트너사 기준 (본부장/도지용 차장)
+                  2순위 파트너사 기준 (본부장/도지용 팀장)
                 </h4>
                 <p className="text-[11px] text-[#635B56] font-medium leading-relaxed">
-                  매입 규모 중위권 6~10위 협력사로, 본부장님과 실무 담당자(도지용 차장)가 동행 방문하여 납기 및 공정 감사, 임가공 비용 조율, 분기 품질 성적을 분석합니다.
+                  매입 규모 중위권 6~10위 협력사로, 본부장님과 실무 담당자(도지용 팀장)가 동행 방문하여 납기 및 공정 감사, 임가공 비용 조율, 분기 품질 성적을 분석합니다.
                 </p>
               </div>
               <div className="p-4 bg-white rounded-xl border border-[#EBE5DF]">
                 <h4 className="font-black text-xs text-emerald-700 mb-1 flex items-center gap-1.5">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
-                  3순위 파트너사 기준 (도지용 차장 단독)
+                  3순위 파트너사 기준 (도지용 팀장 단독)
                 </h4>
                 <p className="text-[11px] text-[#635B56] font-medium leading-relaxed">
-                  매입규모 11~20위의 보조성 자재 협력사로 실무 담당자(도지용 차장)가 단독 방문하여 발주서 발급, 납기 확인 및 간단한 업무 미팅을 전담합니다.
+                  매입규모 11~20위의 보조성 자재 협력사로 실무 담당자(도지용 팀장)가 단독 방문하여 발주서 발급, 납기 확인 및 간단한 업무 미팅을 전담합니다.
                 </p>
               </div>
             </div>
@@ -1215,7 +1237,7 @@ export default function PartnerSchedule() {
                   참석자 지정 (기본 동행기준 자동 설정됨) *
                 </label>
                 <div className="flex gap-4 p-3 bg-[#FDFBF9] border border-[#EBE5DF] rounded-xl">
-                  {['대표님', '본부장님', '도지용 차장'].map(person => (
+                  {['대표님', '본부장님', '도지용 팀장'].map(person => (
                     <label key={person} className="flex items-center gap-2.5 cursor-pointer text-sm font-bold text-[#2C2A29]">
                       <input
                         type="checkbox"

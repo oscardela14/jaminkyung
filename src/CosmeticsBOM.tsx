@@ -635,7 +635,7 @@ const CosmeticsBOM = ({ skus, setSkus, activeRoute, setActiveRoute, selectedSkuI
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                                     <div><label className="block text-xs font-bold text-[#635B56] mb-1.5">제품 카테고리</label>
                                         <select value={newSkuData.category} onChange={(e) => setNewSkuData({ ...newSkuData, category: e.target.value })} className="w-full p-2 bg-[#FDFBF9] border border-[#EBE5DF] rounded-xl text-xs focus:ring-1 focus:ring-[#8C6D58]">
-                                            <option value="세럼/앰플">세럼/앰플</option><option value="크림">크림</option><option value="토너/스킨">토너/스킨</option><option value="클렌저/바디">클렌저/바디</option><option value="기타 1">기타 1</option><option value="기타 2">기타 2</option>
+                                            <option value="세럼/앰플">세럼/앰플</option><option value="크림">크림</option><option value="토너/스킨">토너/스킨</option><option value="클렌저/바디">클렌저/바디</option><option value="기타1">기타1</option><option value="기타2">기타2</option>
                                         </select></div>
                                     <div><label className="block text-xs font-bold text-[#635B56] mb-1.5">완제품 코드 (SKU Code)</label>
                                         <input type="text" placeholder="예: FG-NEW-001" value={newSkuData.id} onChange={(e) => setNewSkuData({ ...newSkuData, id: e.target.value })} className="w-full p-2 bg-[#FDFBF9] border border-[#EBE5DF] rounded-xl text-xs font-mono" /></div>

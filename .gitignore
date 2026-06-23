@@ -22,3 +22,12 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Scratch and temporary logs/reports
+scratch/
+scm_agent_audit_report.md
+public/scm_agent_audit_report.md
+.npmrc
+package-lock.json
+
+

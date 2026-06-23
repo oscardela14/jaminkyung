@@ -63,8 +63,8 @@ const BOMDashboard: React.FC<BOMDashboardProps> = ({ skus, onSkuSelect }) => {
     const totalCostAll = Object.values(categoryWeights).reduce((a, b) => a + b, 0);
     const totalBomCostAll = Object.values(segmentWeights).reduce((a, b) => a + b, 0);
 
-    const PROCUREMENT_CATEGORIES = ['세럼/앰플', '크림', '토너/스킨', '클렌저/바디', '기타 1', '기타 2'];
-    const FILTER_LABELS = ['전체', '세럼/앰플', '크림', '토너/스킨', '클렌저/바디', '기타 1', '기타 2'];
+    const PROCUREMENT_CATEGORIES = ['세럼/앰플', '크림', '토너/스킨', '클렌저/바디', '기타1', '기타2'];
+    const FILTER_LABELS = ['전체', '세럼/앰플', '크림', '토너/스킨', '클렌저/바디', '기타1', '기타2'];
     const BOM_SEGMENTS = ['내용물', '부자재(용기)', '부자재(캡)', '부자재(펌프)', '부자재(포장)', '부자재(라벨)', '임가공비'];
 
     return (

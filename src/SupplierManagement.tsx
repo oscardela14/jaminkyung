@@ -56,10 +56,23 @@ const SupplierManagement: React.FC<Props> = () => {
   const [savedAnalyses] = useState<any[]>(() => {
     try {
       const saved = localStorage.getItem('pa_savedAnalyses_v3');
-      return saved ? JSON.parse(saved) : [];
+      if (saved) {
+        const parsed = JSON.parse(saved) as any[];
+        return parsed.map(analysis => ({
+          ...analysis,
+          data: analysis.data.map((d: any) => {
+            let cleanSup = d.supplier;
+            if (cleanSup === '휴온스' || cleanSup === '휴온스엔' || cleanSup === '휴온스앤') {
+              cleanSup = '휴온스앤';
+            }
+            return { ...d, supplier: cleanSup };
+          })
+        }));
+      }
     } catch (e) {
       return [];
     }
+    return [];
   });
   const [supplierOverrides, setSupplierOverrides] = useState<Record<string, any>>(() => {
     try {
@@ -170,9 +183,14 @@ const SupplierManagement: React.FC<Props> = () => {
       if (analysis.data && Array.isArray(analysis.data)) {
         analysis.data.forEach((d: any) => {
           const { supplier, year, month, amount } = d;
-          if (!supplierMap.has(supplier)) {
-            supplierMap.set(supplier, {
-              name: supplier,
+          if (!supplier && typeof supplier !== 'string') return;
+          let cleanSup = String(supplier).trim();
+          if (cleanSup === '휴온스' || cleanSup === '휴온스엔' || cleanSup === '휴온스앤') {
+            cleanSup = '휴온스앤';
+          }
+          if (!supplierMap.has(cleanSup)) {
+            supplierMap.set(cleanSup, {
+              name: cleanSup,
               category: '분류 미지정',
               address: '추후 입력 (정보 수정 요망)',
               paymentTerms: '추후 입력 (정보 수정 요망)',
@@ -182,17 +200,21 @@ const SupplierManagement: React.FC<Props> = () => {
               rawSpend: []
             });
           }
-          supplierMap.get(supplier).rawSpend.push({ year, month, amount });
+          supplierMap.get(cleanSup).rawSpend.push({ year, month, amount });
         });
       }
     });
 
     // Merge manual overrides and newly added suppliers
     Object.keys(supplierOverrides).forEach(key => {
+      let cleanKey = key.trim();
+      if (cleanKey === '휴온스' || cleanKey === '휴온스엔' || cleanKey === '휴온스앤') {
+        cleanKey = '휴온스앤';
+      }
       const override = supplierOverrides[key];
-      if (!supplierMap.has(key)) {
-        supplierMap.set(key, {
-          name: key,
+      if (!supplierMap.has(cleanKey)) {
+        supplierMap.set(cleanKey, {
+          name: cleanKey,
           category: override.category || '분류 미지정',
           address: override.address || '추후 입력 (정보 수정 요망)',
           paymentTerms: override.paymentTerms || '추후 입력 (정보 수정 요망)',
@@ -202,7 +224,7 @@ const SupplierManagement: React.FC<Props> = () => {
           rawSpend: []
         });
       } else {
-        const sup = supplierMap.get(key);
+        const sup = supplierMap.get(cleanKey);
         sup.category = override.category || sup.category;
         sup.address = override.address || sup.address;
         sup.paymentTerms = override.paymentTerms || sup.paymentTerms;

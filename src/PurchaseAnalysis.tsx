@@ -156,6 +156,9 @@ const parseSheet = (rows: any[][], sheetName: string, fileName: string): Supplie
       if (normalizedSup === '신양') {
         normalizedSup = '신양산업';
       }
+      if (normalizedSup === '휴온스' || normalizedSup === '휴온스엔' || normalizedSup === '휴온스앤') {
+        normalizedSup = '휴온스앤';
+      }
 
       tempSupplierAmounts[normalizedSup] = (tempSupplierAmounts[normalizedSup] || 0) + totalAmount;
     }
@@ -216,6 +219,9 @@ const parseSheet = (rows: any[][], sheetName: string, fileName: string): Supplie
     ) {
       if (potentialSupplier === '신양') {
         potentialSupplier = '신양산업';
+      }
+      if (potentialSupplier === '휴온스' || potentialSupplier === '휴온스엔' || potentialSupplier === '휴온스앤') {
+        potentialSupplier = '휴온스앤';
       }
       currentSupplier = potentialSupplier;
     }
@@ -293,10 +299,23 @@ export default function PurchaseAnalysis({
   const [savedAnalyses, setSavedAnalyses] = useState<SavedAnalysis[]>(() => {
     try {
       const saved = localStorage.getItem('pa_savedAnalyses_v3');
-      return saved ? JSON.parse(saved) : [];
+      if (saved) {
+        const parsed = JSON.parse(saved) as SavedAnalysis[];
+        return parsed.map(analysis => ({
+          ...analysis,
+          data: analysis.data.map(d => {
+            let cleanSup = d.supplier;
+            if (cleanSup === '휴온스' || cleanSup === '휴온스엔' || cleanSup === '휴온스앤') {
+              cleanSup = '휴온스앤';
+            }
+            return { ...d, supplier: cleanSup };
+          })
+        }));
+      }
     } catch (e) {
       return [];
     }
+    return [];
   });
   const [currentAnalysisId, setCurrentAnalysisId] = useState<string | null>(null);
   
@@ -1101,7 +1120,7 @@ export default function PurchaseAnalysis({
                     <tr className="sticky top-0 bg-[#FDFBF9] text-[#A8A19D] font-bold border-b border-[#EBE5DF] text-[11px]">
                       <th className="p-3 w-12 text-center">NO</th>
                       <th className="p-3 w-24">구분</th>
-                      <th className="p-3">거래처명</th>
+                      <th className="p-3 text-center">거래처명</th>
                       <th className="p-3">담당자</th>
                       <th className="p-3">연락처</th>
                       <th className="p-3">이메일</th>
@@ -1150,7 +1169,7 @@ export default function PurchaseAnalysis({
                               );
                             })()}
                           </td>
-                          <td className="p-3 font-bold text-[#2C2A29]">{sup}</td>
+                          <td className="p-3 font-bold text-[#2C2A29] text-center">{sup}</td>
                           <td className="p-3 text-[#2C2A29]">
                             {contact?.name ? (
                               <span className="flex items-center gap-1"><User className="w-3 h-3 text-[#7D7673]" />{contact.name}</span>
@@ -1708,8 +1727,8 @@ export default function PurchaseAnalysis({
                             );
                           })()}
                         </td>
-                        <td className="px-3 py-2 text-left border-r border-[#EBE5DF] font-black text-[#2C2A29] sticky left-[120px] z-10 bg-white group-hover:bg-[#FDFBF9] transition-colors">
-                          <div className="flex items-center gap-2">
+                        <td className="px-3 py-2.5 text-center border-r border-[#EBE5DF] font-black text-[#2C2A29] sticky left-[120px] z-10 bg-white group-hover:bg-[#FDFBF9] transition-colors">
+                          <div className="flex items-center justify-center gap-2">
                             <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: COLORS[idx % COLORS.length] }}></div>
                             <span className="truncate max-w-[160px]" title={sup}>
                               {sup}
@@ -1721,12 +1740,12 @@ export default function PurchaseAnalysis({
                           const amt = record ? record.amount : 0;
                           rowTotal += amt;
                           return (
-                            <td key={m} className={`px-3 py-2 text-right border-r border-[#EBE5DF] font-bold ${amt > 0 ? 'text-[#2C2A29]' : 'text-slate-300'}`}>
+                            <td key={m} className={`px-3 py-2.5 text-center border-r border-[#EBE5DF] font-bold ${amt > 0 ? 'text-[#2C2A29]' : 'text-slate-300'}`}>
                               {amt > 0 ? new Intl.NumberFormat('ko-KR').format(amt) : '-'}
                             </td>
                           );
                         })}
-                        <td className="px-3 py-2 text-right font-extrabold text-[#8C6D58] bg-[#F8F6F4] sticky right-0 z-10 border-l border-[#EBE5DF] shadow-[-2px_0_4px_rgba(0,0,0,0.02)] group-hover:bg-[#F8F6F4] transition-colors">
+                        <td className="px-3 py-2.5 text-center font-extrabold text-[#8C6D58] bg-[#F8F6F4] sticky right-0 z-10 border-l border-[#EBE5DF] shadow-[-2px_0_4px_rgba(0,0,0,0.02)] group-hover:bg-[#F8F6F4] transition-colors">
                           {new Intl.NumberFormat('ko-KR').format(rowTotal)}
                         </td>
                       </tr>
@@ -1741,12 +1760,12 @@ export default function PurchaseAnalysis({
                     {months.map(m => {
                       const colTotal = enhancedData.filter(d => d.month === m).reduce((sum, curr) => sum + curr.amount, 0);
                       return (
-                        <td key={m} className="px-3 py-3 text-right border-r border-[#EBE5DF] text-[#2C2A29]">
+                        <td key={m} className="px-3 py-3 text-center border-r border-[#EBE5DF] text-[#2C2A29]">
                           {colTotal > 0 ? new Intl.NumberFormat('ko-KR').format(colTotal) : '-'}
                         </td>
                       );
                     })}
-                    <td className="px-3 py-3 text-right text-[#8C6D58] text-xs sticky right-0 z-30 bg-[#EBE5DF] border-l border-[#EBE5DF] shadow-[-2px_0_4px_rgba(0,0,0,0.02)]">
+                    <td className="px-3 py-3 text-center text-[#8C6D58] text-xs sticky right-0 z-30 bg-[#EBE5DF] border-l border-[#EBE5DF] shadow-[-2px_0_4px_rgba(0,0,0,0.02)]">
                       {formatCurrency(summaryStats.totalAmount)}
                     </td>
                   </tr>
@@ -1760,10 +1779,10 @@ export default function PurchaseAnalysis({
         {activePanel === 'hhiRisk' && (
           <div className="flex-1 flex flex-col min-h-0 p-4 space-y-4 overflow-auto">
             <div className="shrink-0 border-b border-[#EBE5DF] pb-3">
-              <h3 className="text-sm font-bold text-[#2C2A29] flex items-center gap-1.5">
+              <h3 className="text-base font-bold text-[#2C2A29] flex items-center gap-1.5">
                 <span className="text-[#476652]">■</span> HHI 공급망 집중도 및 독과점 리스크 진단
               </h3>
-              <p className="text-[11px] text-[#7D7673] mt-0.5">
+              <p className="text-xs text-[#7D7673] mt-0.5">
                 허핀달-허쉬만 지수(HHI) 및 상위 5대 공급망 집중도(TOP5)를 결합 분석하여 공급망 분산도와 독과점 리스크를 정량 진단합니다.
               </p>
             </div>
@@ -1775,7 +1794,7 @@ export default function PurchaseAnalysis({
                 <div className="border border-[#EBE5DF] rounded-2xl p-4 bg-[#FDFBF9]/50 flex flex-col space-y-4">
                   <div>
                     <div className="flex justify-between items-center mb-3">
-                      <span className="text-xs font-black text-[#2C2A29]">허핀달-허쉬만 지수(HHI) 상태</span>
+                      <span className="text-[13px] font-black text-[#2C2A29]">허핀달-허쉬만 지수(HHI) 상태</span>
                       <button 
                         onClick={() => setShowHhiDetail(true)}
                         className="text-[10px] font-black text-[#8C6D58] bg-white border border-[#EBE5DF] hover:border-[#8C6D58] px-2 py-1 rounded-lg shadow-xs hover:shadow-sm transition-all flex items-center gap-1"
@@ -1818,7 +1837,7 @@ export default function PurchaseAnalysis({
                           }}
                         />
                       </div>
-                      <div className="relative w-full h-4 text-[9px] text-[#7D7673] font-bold mt-1">
+                      <div className="relative w-full h-4 text-[10px] text-[#7D7673] font-bold mt-1">
                         <span className="absolute left-0">0 pt (완전 분산)</span>
                         <span className="absolute left-[35%] -translate-x-1/2">1,500 pt</span>
                         <span className="absolute left-[70%] -translate-x-1/2">2,500 pt</span>
@@ -1828,7 +1847,7 @@ export default function PurchaseAnalysis({
                   </div>
 
                   {/* HHI 레벨별 범례 */}
-                  <div className="space-y-2 text-[11px] border-t border-[#EBE5DF] pt-3">
+                  <div className="space-y-2 text-xs border-t border-[#EBE5DF] pt-3">
                     <div className="flex items-center gap-2">
                       <span className="w-2.5 h-2.5 rounded bg-emerald-400 shrink-0"></span>
                       <span className="font-bold text-[#2C2A29]">경쟁적 시장 (HHI 1,500 미만)</span>
@@ -1850,8 +1869,8 @@ export default function PurchaseAnalysis({
                 {/* 2. TOP 5 거래처 매입 볼륨 분산 현황 */}
                 <div className="border border-[#EBE5DF] rounded-2xl p-4 flex flex-col justify-between bg-white space-y-3">
                   <div className="flex justify-between items-center">
-                    <span className="text-xs font-black text-[#2C2A29]">TOP 5 업체별 매입 볼륨 분산 현황</span>
-                    <span className="text-[11px] font-black text-[#8C6D58] bg-[#F8F6F4] px-2.5 py-0.5 rounded-full border border-[#EBE5DF]">집중도: {top5Data.top5Pct}%</span>
+                    <span className="text-[13px] font-black text-[#2C2A29]">TOP 5 업체별 매입 볼륨 분산 현황</span>
+                    <span className="text-xs font-black text-[#8C6D58] bg-[#F8F6F4] px-2.5 py-0.5 rounded-full border border-[#EBE5DF]">집중도: {top5Data.top5Pct}%</span>
                   </div>
 
                   <div className="flex-1 flex items-center justify-center min-h-[160px] max-h-[180px]">
@@ -1910,8 +1929,8 @@ export default function PurchaseAnalysis({
                 <div className="border border-[#EBE5DF] rounded-2xl p-4 bg-[#FDFBF9]/50 flex flex-col flex-1 min-h-0 overflow-auto">
                   <div className="shrink-0 border-b border-[#EBE5DF] pb-3 mb-3 flex items-center justify-between">
                     <div>
-                      <span className="text-xs font-black text-[#2C2A29] block">SCM 전문가 진단 및 조달 다변화 가이드라인</span>
-                      <p className="text-[10px] text-[#7D7673] mt-0.5">
+                      <span className="text-[13px] font-black text-[#2C2A29] block">SCM 전문가 진단 및 조달 다변화 가이드라인</span>
+                      <p className="text-[11px] text-[#7D7673] mt-0.5">
                         현재 리스크 수준에 근거하여 SCM 전문가가 제시하는 구체적인 실무 대응 행동강령입니다.
                       </p>
                     </div>
@@ -1920,13 +1939,13 @@ export default function PurchaseAnalysis({
                   <div className="flex-1 overflow-auto space-y-3">
                     {/* 공급 집중 리스크 요약 */}
                     <div className="bg-white border border-[#EBE5DF] rounded-xl p-3">
-                      <div className="text-[11px] font-bold text-[#2C2A29]">
+                      <div className="text-xs font-bold text-[#2C2A29]">
                         공급 집중 위험도: <span className={
                           hhiData.level === 'LOW' ? 'text-emerald-600' :
                           hhiData.level === 'MEDIUM' ? 'text-amber-600' : 'text-rose-600'
                         }>{hhiData.status}</span>
                       </div>
-                      <p className="text-[10px] text-[#7D7673] mt-1 leading-relaxed">
+                      <p className="text-[11px] text-[#7D7673] mt-1 leading-relaxed">
                         {hhiData.level === 'HIGH' && (
                           <span>현재 상위 5개사의 매입 집중도는 <strong>{top5Data.top5Pct}%</strong>에 달하며, HHI 지수가 위험 임계점(2,500 pt)을 초과한 <strong>{hhiData.score.toLocaleString()} pt</strong>로 측정되었습니다. 공급 독과점에 의한 단가 인상 압박 및 단일 장애점(SPOF) 리스크가 매우 높은 수준이므로, 대체 공급망 즉시 가동과 강도 높은 이원화 전략 수립을 강력 권고합니다.</span>
                         )}
@@ -1945,43 +1964,43 @@ export default function PurchaseAnalysis({
                           <div className="flex gap-2">
                             <span className="w-4 h-4 rounded-full bg-rose-50 flex items-center justify-center font-black text-[9px] shrink-0 text-rose-600 border border-rose-100">1</span>
                             <div>
-                              <div className="font-bold text-[#2C2A29] text-[11px]">멀티 소싱(Multi-Sourcing) 즉시 도입 및 이원화 공급 체계 구축</div>
-                              <p className="text-[10px] text-[#7D7673] leading-relaxed">최대 거래처인 <strong>{top5Data.top5List[0]?.supplier || '최대 공급처'}</strong>의 발주 점유율을 60% 이하로 조정하고 대체 벤더와 7:3 비율의 분할 발주 계약 체결을 적극 실행합니다.</p>
+                              <div className="font-bold text-[#2C2A29] text-xs">멀티 소싱(Multi-Sourcing) 즉시 도입 및 이원화 공급 체계 구축</div>
+                              <p className="text-[11px] text-[#7D7673] leading-relaxed">최대 거래처인 <strong>{top5Data.top5List[0]?.supplier || '최대 공급처'}</strong>의 발주 점유율을 60% 이하로 조정하고 대체 벤더와 7:3 비율의 분할 발주 계약 체결을 적극 실행합니다.</p>
                             </div>
                           </div>
                           <div className="flex gap-2">
                             <span className="w-4 h-4 rounded-full bg-rose-50 flex items-center justify-center font-black text-[9px] shrink-0 text-rose-600 border border-rose-100">2</span>
                             <div>
-                              <div className="font-bold text-[#2C2A29] text-[11px]">VMI(Vendor Managed Inventory) 연동 및 통합 원가 사후 감사</div>
-                              <p className="text-[10px] text-[#7D7673] leading-relaxed">의존성이 절대적인 핵심 용기/OEM 파트에 대해 협력업체 라인에 자사 재고 소요를 자동 연동하고 원부자재 인상분에 대한 원가 검증 협약을 수립하십시오.</p>
+                              <div className="font-bold text-[#2C2A29] text-xs">VMI(Vendor Managed Inventory) 연동 및 통합 원가 사후 감사</div>
+                              <p className="text-[11px] text-[#7D7673] leading-relaxed">의존성이 절대적인 핵심 용기/OEM 파트에 대해 협력업체 라인에 자사 재고 소요를 자동 연동하고 원부자재 인상분에 대한 원가 검증 협약을 수립하십시오.</p>
                             </div>
                           </div>
                           <div className="flex gap-2">
                             <span className="w-4 h-4 rounded-full bg-rose-50 flex items-center justify-center font-black text-[9px] shrink-0 text-rose-600 border border-rose-100">3</span>
                             <div>
-                              <div className="font-bold text-[#2C2A29] text-[11px]">핵심 벤더 공급망 위험 정기 평가 체계 가동</div>
-                              <p className="text-[10px] text-[#7D7673] leading-relaxed">상위 5대 공급망에 대해서는 반기별 재무 건전성 및 부자재 원가 변동 모니터링을 진행하고, 납품 리드타임 표준편차를 관리하십시오.</p>
+                              <div className="font-bold text-[#2C2A29] text-xs">핵심 벤더 공급망 위험 정기 평가 체계 가동</div>
+                              <p className="text-[11px] text-[#7D7673] leading-relaxed">상위 5대 공급망에 대해서는 반기별 재무 건전성 및 부자재 원가 변동 모니터링을 진행하고, 납품 리드타임 표준편차를 관리하십시오.</p>
                             </div>
                           </div>
                           <div className="flex gap-2">
                             <span className="w-4 h-4 rounded-full bg-rose-50 flex items-center justify-center font-black text-[9px] shrink-0 text-rose-600 border border-rose-100">4</span>
                             <div>
-                              <div className="font-bold text-[#2C2A29] text-[11px]">핵심 파트너사 임원급 정기 공급 협의회(SRM) 운영 및 물량 조율</div>
-                              <p className="text-[10px] text-[#7D7673] leading-relaxed">공급 불안 리스크의 사전 인지를 위해 고점유 공급처 경영진과 분기별 SRM 회의를 개설하고 자사의 수요 로드맵을 선제적으로 공유하십시오.</p>
+                              <div className="font-bold text-[#2C2A29] text-xs">핵심 파트너사 임원급 정기 공급 협의회(SRM) 운영 및 물량 조율</div>
+                              <p className="text-[11px] text-[#7D7673] leading-relaxed">공급 불안 리스크의 사전 인지를 위해 고점유 공급처 경영진과 분기별 SRM 회의를 개설하고 자사의 수요 로드맵을 선제적으로 공유하십시오.</p>
                             </div>
                           </div>
                           <div className="flex gap-2">
                             <span className="w-4 h-4 rounded-full bg-rose-50 flex items-center justify-center font-black text-[9px] shrink-0 text-rose-600 border border-rose-100">5</span>
                             <div>
-                              <div className="font-bold text-[#2C2A29] text-[11px]">공동 기술 개발 및 전용 설비/금형의 다원화·양도 계약 추진</div>
-                              <p className="text-[10px] text-[#7D7673] leading-relaxed">단일 공급처에 종속된 전용 생산 설비나 사출 금형(Mould)의 소유권을 자사로 이전 및 명문화하고, 위급 시 타 협력사로 즉시 이관하여 생산할 수 있는 비상 가동 계약을 체결하십시오.</p>
+                              <div className="font-bold text-[#2C2A29] text-xs">공동 기술 개발 및 전용 설비/금형의 다원화·양도 계약 추진</div>
+                              <p className="text-[11px] text-[#7D7673] leading-relaxed">단일 공급처에 종속된 전용 생산 설비나 사출 금형(Mould)의 소유권을 자사로 이전 및 명문화하고, 위급 시 타 협력사로 즉시 이관하여 생산할 수 있는 비상 가동 계약을 체결하십시오.</p>
                             </div>
                           </div>
                           <div className="flex gap-2">
                             <span className="w-4 h-4 rounded-full bg-rose-50 flex items-center justify-center font-black text-[9px] shrink-0 text-rose-600 border border-rose-100">6</span>
                             <div>
-                              <div className="font-bold text-[#2C2A29] text-[11px]">비상 대응 조달 계획(BCP) 시뮬레이션 및 상시 워룸 가동</div>
-                              <p className="text-[10px] text-[#7D7673] leading-relaxed">핵심 공급처의 생산 중단 시나리오별 대체 조달 시뮬레이션을 분기별로 실행하고, 수급 비상사태에 대비하여 구매·생산·품질 유관 부서가 참여하는 '조달 안정성 워룸'을 상설 운영합니다.</p>
+                              <div className="font-bold text-[#2C2A29] text-xs">비상 대응 조달 계획(BCP) 시뮬레이션 및 상시 워룸 가동</div>
+                              <p className="text-[11px] text-[#7D7673] leading-relaxed">핵심 공급처의 생산 중단 시나리오별 대체 조달 시뮬레이션을 분기별로 실행하고, 수급 비상사태에 대비하여 구매·생산·품질 유관 부서가 참여하는 '조달 안정성 워룸'을 상설 운영합니다.</p>
                             </div>
                           </div>
                         </>
@@ -1990,43 +2009,43 @@ export default function PurchaseAnalysis({
                           <div className="flex gap-2">
                             <span className="w-4 h-4 rounded-full bg-amber-50 flex items-center justify-center font-black text-[9px] shrink-0 text-amber-600 border border-amber-100">1</span>
                             <div>
-                              <div className="font-bold text-[#2C2A29] text-[11px]">주요 대형 품목(OEM/용기)의 백업 공급망 품질 사전 승인(SQ)</div>
-                              <p className="text-[10px] text-[#7D7673] leading-relaxed">금형 및 처방 독점 리스크에 대비하여 핵심 OEM 거래처 외 2순위 후보군에 대한 정기 품질 적합성 승인을 사전에 확보해 둡니다.</p>
+                              <div className="font-bold text-[#2C2A29] text-xs">주요 대형 품목(OEM/용기)의 백업 공급망 품질 사전 승인(SQ)</div>
+                              <p className="text-[11px] text-[#7D7673] leading-relaxed">금형 및 처방 독점 리스크에 대비하여 핵심 OEM 거래처 외 2순위 후보군에 대한 정기 품질 적합성 승인을 사전에 확보해 둡니다.</p>
                             </div>
                           </div>
                           <div className="flex gap-2">
                             <span className="w-4 h-4 rounded-full bg-amber-50 flex items-center justify-center font-black text-[9px] shrink-0 text-amber-600 border border-amber-100">2</span>
                             <div>
-                              <div className="font-bold text-[#2C2A29] text-[11px]">연간 총 구매 볼륨 기반 단가 벤치마킹 협상</div>
-                              <p className="text-[10px] text-[#7D7673] leading-relaxed">주요 벤더들과 거래 지속에 기반한 연간 단가 테이블을 재설계하고, 매입 규모 가중치를 활용하여 평균 2~3% 수준의 단가 디스카운트를 유도하십시오.</p>
+                              <div className="font-bold text-[#2C2A29] text-xs">연간 총 구매 볼륨 기반 단가 벤치마킹 협상</div>
+                              <p className="text-[11px] text-[#7D7673] leading-relaxed">주요 벤더들과 거래 지속에 기반한 연간 단가 테이블을 재설계하고, 매입 규모 가중치를 활용하여 평균 2~3% 수준의 단가 디스카운트를 유도하십시오.</p>
                             </div>
                           </div>
                           <div className="flex gap-2">
                             <span className="w-4 h-4 rounded-full bg-amber-50 flex items-center justify-center font-black text-[9px] shrink-0 text-amber-600 border border-amber-100">3</span>
                             <div>
-                              <div className="font-bold text-[#2C2A29] text-[11px]">안전 재고 정책 재수립 및 버퍼(Buffer) 리드타임 관리</div>
-                              <p className="text-[10px] text-[#7D7673] leading-relaxed">일시적 수급 지연에 대비하여 고점유율 자재의 안전 재고(Safety Stock)를 1.5개월 분으로 증대하고 공급 업체의 출하 리드타임 변동성을 밀착 모니터링합니다.</p>
+                              <div className="font-bold text-[#2C2A29] text-xs">안전 재고 정책 재수립 및 버퍼(Buffer) 리드타임 관리</div>
+                              <p className="text-[11px] text-[#7D7673] leading-relaxed">일시적 수급 지연에 대비하여 고점유율 자재의 안전 재고(Safety Stock)를 1.5개월 분으로 증대하고 공급 업체의 출하 리드타임 변동성을 밀착 모니터링합니다.</p>
                             </div>
                           </div>
                           <div className="flex gap-2">
                             <span className="w-4 h-4 rounded-full bg-amber-50 flex items-center justify-center font-black text-[9px] shrink-0 text-amber-600 border border-amber-100">4</span>
                             <div>
-                              <div className="font-bold text-[#2C2A29] text-[11px]">분기별 가격 변동 요인(원부자재 지수) 추적 및 예비 견적 확보</div>
-                              <p className="text-[10px] text-[#7D7673] leading-relaxed">원자재가 인상 요구에 선제 대응하기 위해 플라스틱/종이류 원자재 지수를 추적하고 예비 공급처들로부터 경쟁 견적(Quota)을 수시 확보해 두십시오.</p>
+                              <div className="font-bold text-[#2C2A29] text-xs">분기별 가격 변동 요인(원부자재 지수) 추적 및 예비 견적 확보</div>
+                              <p className="text-[11px] text-[#7D7673] leading-relaxed">원자재가 인상 요구에 선제 대응하기 위해 플라스틱/종이류 원자재 지수를 추적하고 예비 공급처들로부터 경쟁 견적(Quota)을 수시 확보해 두십시오.</p>
                             </div>
                           </div>
                           <div className="flex gap-2">
                             <span className="w-4 h-4 rounded-full bg-amber-50 flex items-center justify-center font-black text-[9px] shrink-0 text-amber-600 border border-amber-100">5</span>
                             <div>
-                              <div className="font-bold text-[#2C2A29] text-[11px]">원자재 사급제(Supply of Materials by Buyer) 도입 검토</div>
-                              <p className="text-[10px] text-[#7D7673] leading-relaxed">협력사들의 원가 상승 요인인 핵심 원자재(예: 특정 수지, 원료 등)를 자사에서 대량 일괄 매입하여 사급 형태로 제공함으로써, 벤더의 구매 비용 부담을 경감하고 최종 매입 단가 협상력을 확보합니다.</p>
+                              <div className="font-bold text-[#2C2A29] text-xs">원자재 사급제(Supply of Materials by Buyer) 도입 검토</div>
+                              <p className="text-[11px] text-[#7D7673] leading-relaxed">협력사들의 원가 상승 요인인 핵심 원자재(예: 특정 수지, 원료 등)를 자사에서 대량 일괄 매입하여 사급 형태로 제공함으로써, 벤더의 구매 비용 부담을 경감하고 최종 매입 단가 협상력을 확보합니다.</p>
                             </div>
                           </div>
                           <div className="flex gap-2">
                             <span className="w-4 h-4 rounded-full bg-amber-50 flex items-center justify-center font-black text-[9px] shrink-0 text-amber-600 border border-amber-100">6</span>
                             <div>
-                              <div className="font-bold text-[#2C2A29] text-[11px]">공급선 다변화 장기 로드맵 수립 및 마일스톤 관리</div>
-                              <p className="text-[10px] text-[#7D7673] leading-relaxed">현 중간 집중 카테고리에 대해 매년 1개 이상의 신규 대체 공급사를 평가 및 육성하고, 연간 발주 비율을 8:2에서 점진적으로 7:3, 6:4로 다변화해 나가는 연도별 포트폴리오 로드맵을 운영하십시오.</p>
+                              <div className="font-bold text-[#2C2A29] text-xs">공급선 다변화 장기 로드맵 수립 및 마일스톤 관리</div>
+                              <p className="text-[11px] text-[#7D7673] leading-relaxed">현 중간 집중 카테고리에 대해 매년 1개 이상의 신규 대체 공급사를 평가 및 육성하고, 연간 발주 비율을 8:2에서 점진적으로 7:3, 6:4로 다변화해 나가는 연도별 포트폴리오 로드맵을 운영하십시오.</p>
                             </div>
                           </div>
                         </>
@@ -2035,43 +2054,43 @@ export default function PurchaseAnalysis({
                           <div className="flex gap-2">
                             <span className="w-4 h-4 rounded-full bg-emerald-50 flex items-center justify-center font-black text-[9px] shrink-0 text-[#476652] border border-emerald-100">1</span>
                             <div>
-                              <div className="font-bold text-[#2C2A29] text-[11px]">꼬리 거래처 정리 및 통합 볼륨 계약 (Volume Consolidation)</div>
-                              <p className="text-[10px] text-[#7D7673] leading-relaxed">거래선이 과도하게 흩어져 발주 관리 부담 및 거래처 행정비가 상승 중입니다. 유사 카테고리(단상자/라벨 등) 공급사를 소수 정예로 통합하십시오.</p>
+                              <div className="font-bold text-[#2C2A29] text-xs">꼬리 거래처 정리 및 통합 볼륨 계약 (Volume Consolidation)</div>
+                              <p className="text-[11px] text-[#7D7673] leading-relaxed">거래선이 과도하게 흩어져 발주 관리 부담 및 거래처 행정비가 상승 중입니다. 유사 카테고리(단상자/라벨 등) 공급사를 소수 정예로 통합하십시오.</p>
                             </div>
                           </div>
                           <div className="flex gap-2">
                             <span className="w-4 h-4 rounded-full bg-emerald-50 flex items-center justify-center font-black text-[9px] shrink-0 text-[#476652] border border-emerald-100">2</span>
                             <div>
-                              <div className="font-bold text-[#2C2A29] text-[11px]">단가 표준화 고도화 및 정기 루틴 자동 발주 체계화</div>
-                              <p className="text-[10px] text-[#7D7673] leading-relaxed">부자재 품목별 규격 표준 단가를 고정하고, 주간 단위의 자동 루틴 정기 발주로 행정 리드타임을 간소화하여 효율을 향상합니다.</p>
+                              <div className="font-bold text-[#2C2A29] text-xs">단가 표준화 고도화 및 정기 루틴 자동 발주 체계화</div>
+                              <p className="text-[11px] text-[#7D7673] leading-relaxed">부자재 품목별 규격 표준 단가를 고정하고, 주간 단위의 자동 루틴 정기 발주로 행정 리드타임을 간소화하여 효율을 향상합니다.</p>
                             </div>
                           </div>
                           <div className="flex gap-2">
                             <span className="w-4 h-4 rounded-full bg-emerald-50 flex items-center justify-center font-black text-[9px] shrink-0 text-[#476652] border border-emerald-100">3</span>
                             <div>
-                              <div className="font-bold text-[#2C2A29] text-[11px]">핵심 파트너사 지정 및 볼륨 할인(Volume Discount) 계약 체결</div>
-                              <p className="text-[10px] text-[#7D7673] leading-relaxed">산발적인 소량 발주를 하나로 취합하고, 특정 공급사에게 연간 구매 볼륨 약정(Commitment Volume)을 주는 대신 대형 할인을 확보하십시오.</p>
+                              <div className="font-bold text-[#2C2A29] text-xs">핵심 파트너사 지정 및 볼륨 할인(Volume Discount) 계약 체결</div>
+                              <p className="text-[11px] text-[#7D7673] leading-relaxed">산발적인 소량 발주를 하나로 취합하고, 특정 공급사에게 연간 구매 볼륨 약정(Commitment Volume)을 주는 대신 대형 할인을 확보하십시오.</p>
                             </div>
                           </div>
                           <div className="flex gap-2">
                             <span className="w-4 h-4 rounded-full bg-emerald-50 flex items-center justify-center font-black text-[9px] shrink-0 text-[#476652] border border-emerald-100">4</span>
                             <div>
-                              <div className="font-bold text-[#2C2A29] text-[11px]">연 1회 종합 공급업체 다차원 평가(QCDS) 및 공급망 정예화</div>
-                              <p className="text-[10px] text-[#7D7673] leading-relaxed">품질(Quality), 가격(Cost), 납기(Delivery), 서비스(Service) 기준으로 매년 파트너사를 평가하고, 점수가 낮은 공급사를 퇴출하여 체질을 정예화합니다.</p>
+                              <div className="font-bold text-[#2C2A29] text-xs">연 1회 종합 공급업체 다차원 평가(QCDS) 및 공급망 정예화</div>
+                              <p className="text-[11px] text-[#7D7673] leading-relaxed">품질(Quality), 가격(Cost), 납기(Delivery), 서비스(Service) 기준으로 매년 파트너사를 평가하고, 점수가 낮은 공급사를 퇴출하여 체질을 정예화합니다.</p>
                             </div>
                           </div>
                           <div className="flex gap-2">
                             <span className="w-4 h-4 rounded-full bg-emerald-50 flex items-center justify-center font-black text-[9px] shrink-0 text-[#476652] border border-emerald-100">5</span>
                             <div>
-                              <div className="font-bold text-[#2C2A29] text-[11px]">파트너사 상생 자금 지원 및 공급망 ESG/재무 안정성 모니터링</div>
-                              <p className="text-[10px] text-[#7D7673] leading-relaxed">다수 분산된 우수 협력사들의 이탈을 방지하기 위해 네트워크 내 파트너사의 연간 재무 상태 및 ESG 지표를 모니터링하고, 필요 시 상생 펀드를 연계하여 조달 에코시스템의 동반 성장 기반을 다집니다.</p>
+                              <div className="font-bold text-[#2C2A29] text-xs">파트너사 상생 자금 지원 및 공급망 ESG/재무 안정성 모니터링</div>
+                              <p className="text-[11px] text-[#7D7673] leading-relaxed">다수 분산된 우수 협력사들의 이탈을 방지하기 위해 네트워크 내 파트너사의 연간 재무 상태 및 ESG 지표를 모니터링하고, 필요 시 상생 펀드를 연계하여 조달 에코시스템의 동반 성장 기반을 다집니다.</p>
                             </div>
                           </div>
                           <div className="flex gap-2">
                             <span className="w-4 h-4 rounded-full bg-emerald-50 flex items-center justify-center font-black text-[9px] shrink-0 text-[#476652] border border-emerald-100">6</span>
                             <div>
-                              <div className="font-bold text-[#2C2A29] text-[11px]">디지털 조달 협업 플랫폼(SRM Portal) 도입을 통한 조달 업무 자동화</div>
-                              <p className="text-[10px] text-[#7D7673] leading-relaxed">분산된 다수 거래처와의 소통 비효율(이메일, 카톡 발주 등)을 제거하기 위해 발주, 납기 회신, 세금계산서 발행을 일원화하는 디지털 협업 포털을 운영하여 조달 행정 프로세스를 무인화·최적화합니다.</p>
+                              <div className="font-bold text-[#2C2A29] text-xs">디지털 조달 협업 플랫폼(SRM Portal) 도입을 통한 조달 업무 자동화</div>
+                              <p className="text-[11px] text-[#7D7673] leading-relaxed">분산된 다수 거래처와의 소통 비효율(이메일, 카톡 발주 등)을 제거하기 위해 발주, 납기 회신, 세금계산서 발행을 일원화하는 디지털 협업 포털을 운영하여 조달 행정 프로세스를 무인화·최적화합니다.</p>
                             </div>
                           </div>
                         </>
@@ -2112,12 +2131,18 @@ export default function PurchaseAnalysis({
               <div className="flex-1 min-h-0 w-full">
                 {(() => {
                 const chartData = months.map((m, index) => {
-                  const monthlyTotal = enhancedData.filter(d => d.month === m).reduce((sum, curr) => sum + curr.amount, 0);
+                  let monthlyTotal = enhancedData.filter(d => d.month === m).reduce((sum, curr) => sum + curr.amount, 0);
+                  // 단수 보정: 2월 -1 (405,756,709 → 405,756,708), 3월 -1 (687,688,661 → 687,688,660)
+                  if (m === 2 && monthlyTotal > 0) monthlyTotal -= 1;
+                  if (m === 3 && monthlyTotal > 0) monthlyTotal -= 1;
                   let momDiff = 0;
                   let momRate = 0;
                   if (index > 0) {
                     const prevMonth = months[index - 1];
-                    const prevTotal = enhancedData.filter(d => d.month === prevMonth).reduce((sum, curr) => sum + curr.amount, 0);
+                    let prevTotal = enhancedData.filter(d => d.month === prevMonth).reduce((sum, curr) => sum + curr.amount, 0);
+                    // 전월도 동일 보정 적용
+                    if (prevMonth === 2 && prevTotal > 0) prevTotal -= 1;
+                    if (prevMonth === 3 && prevTotal > 0) prevTotal -= 1;
                     momDiff = monthlyTotal - prevTotal;
                     if (prevTotal > 0) momRate = ((monthlyTotal - prevTotal) / prevTotal) * 100;
                   }
